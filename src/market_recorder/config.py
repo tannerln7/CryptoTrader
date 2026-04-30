@@ -159,12 +159,34 @@ class AsterSymbolConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class AsterDepthConfig:
+	snapshot_limit: int
+	snapshot_interval_seconds: int
+
+	@classmethod
+	def from_mapping(cls, mapping: Mapping[str, Any], *, location: str) -> "AsterDepthConfig":
+		snapshot_limit = _require_int(mapping, "snapshot_limit", location)
+		if snapshot_limit <= 0:
+			raise ConfigError(f"{location}.snapshot_limit must be a positive integer")
+
+		snapshot_interval_seconds = _require_int(mapping, "snapshot_interval_seconds", location)
+		if snapshot_interval_seconds <= 0:
+			raise ConfigError(f"{location}.snapshot_interval_seconds must be a positive integer")
+
+		return cls(
+			snapshot_limit=snapshot_limit,
+			snapshot_interval_seconds=snapshot_interval_seconds,
+		)
+
+
+@dataclass(frozen=True, slots=True)
 class AsterSourceConfig:
 	enabled: bool
 	rest_base_url: str
 	ws_base_url: str
 	symbols: tuple[AsterSymbolConfig, ...]
 	streams: tuple[str, ...]
+	depth: AsterDepthConfig
 
 	@classmethod
 	def from_mapping(cls, mapping: Mapping[str, Any]) -> "AsterSourceConfig":
@@ -178,12 +200,22 @@ class AsterSourceConfig:
 			raise ConfigError("aster.symbols must contain at least one symbol when aster.enabled is true")
 		if enabled and not streams:
 			raise ConfigError("aster.streams must contain at least one stream when aster.enabled is true")
+		depth = AsterDepthConfig.from_mapping(
+			_optional_section(
+				mapping,
+				"depth",
+				"aster",
+				default={"snapshot_limit": 1000, "snapshot_interval_seconds": 300},
+			),
+			location="aster.depth",
+		)
 		return cls(
 			enabled=enabled,
 			rest_base_url=_require_str(mapping, "rest_base_url", "aster"),
 			ws_base_url=_require_str(mapping, "ws_base_url", "aster"),
 			symbols=symbols,
 			streams=streams,
+			depth=depth,
 		)
 
 
@@ -321,6 +353,21 @@ def _resolve_repo_path(value: str | Path, repo_root: Path) -> Path:
 def _require_section(mapping: Mapping[str, Any], key: str, location: str) -> Mapping[str, Any]:
 	if key not in mapping:
 		raise ConfigError(f"Missing required section {location}.{key}")
+	value = mapping[key]
+	if not isinstance(value, Mapping):
+		raise ConfigError(f"{location}.{key} must be a mapping")
+	return value
+
+
+def _optional_section(
+	mapping: Mapping[str, Any],
+	key: str,
+	location: str,
+	*,
+	default: Mapping[str, Any],
+) -> Mapping[str, Any]:
+	if key not in mapping:
+		return default
 	value = mapping[key]
 	if not isinstance(value, Mapping):
 		raise ConfigError(f"{location}.{key} must be a mapping")

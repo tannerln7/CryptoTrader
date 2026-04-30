@@ -17,6 +17,9 @@ aster:
   enabled: true
   rest_base_url: https://fapi.asterdex.com
   ws_base_url: wss://fstream.asterdex.com
+  depth:
+    snapshot_limit: 1000
+    snapshot_interval_seconds: 300
   symbols:
     - canonical_symbol: BTCUSD
       source_symbol: BTCUSDT

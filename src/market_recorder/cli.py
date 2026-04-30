@@ -14,6 +14,7 @@ from .contracts import build_market_event
 from .logging import configure_logging, get_logger
 from .runtime import RecorderRuntime
 from .sources.aster import AsterCaptureSummary, capture_aster
+from .sources.aster_depth import AsterDepthCaptureSummary, capture_aster_depth
 from .sources.pyth import PythCaptureSummary, capture_pyth
 from .storage import (
     RawFileValidationSummary,
@@ -107,6 +108,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional maximum runtime for the Aster capture command.",
     )
 
+    capture_aster_depth_parser = subparsers.add_parser(
+        "capture-aster-depth",
+        help="Capture Aster depth streams and periodic REST snapshots into raw storage.",
+    )
+    _add_config_arguments(capture_aster_depth_parser)
+    capture_aster_depth_parser.add_argument(
+        "--event-limit",
+        type=int,
+        default=None,
+        help="Optional maximum number of Aster depth events to capture before exiting.",
+    )
+    capture_aster_depth_parser.add_argument(
+        "--duration-seconds",
+        type=float,
+        default=None,
+        help="Optional maximum runtime for the Aster depth capture command.",
+    )
+
     validate_raw_parser = subparsers.add_parser(
         "validate-raw",
         help="Validate an existing raw .jsonl.zst file.",
@@ -147,6 +166,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if command == "capture-aster":
         configure_logging(config.logging.level, structured=config.logging.structured)
         return asyncio.run(_capture_aster_command(config, args))
+    if command == "capture-aster-depth":
+        configure_logging(config.logging.level, structured=config.logging.structured)
+        return asyncio.run(_capture_aster_depth_command(config, args))
 
     configure_logging(config.logging.level, structured=config.logging.structured)
     return asyncio.run(_run_runtime_check(config))
@@ -208,6 +230,20 @@ def _format_aster_capture_summary(summary: AsterCaptureSummary) -> str:
         "Aster capture complete",
         f"Records: {summary.records_written}",
         f"Reconnects: {summary.reconnect_count}",
+        f"Error records: {summary.error_record_count}",
+    ]
+    for path in summary.output_paths:
+        lines.append(f"Output path: {path}")
+    return "\n".join(lines)
+
+
+def _format_aster_depth_capture_summary(summary: AsterDepthCaptureSummary) -> str:
+    lines = [
+        "Aster depth capture complete",
+        f"Depth records: {summary.depth_record_count}",
+        f"Snapshots: {summary.snapshot_record_count}",
+        f"Reconnects: {summary.reconnect_count}",
+        f"Continuity restarts: {summary.continuity_restart_count}",
         f"Error records: {summary.error_record_count}",
     ]
     for path in summary.output_paths:
@@ -280,6 +316,17 @@ async def _capture_aster_command(config, args: argparse.Namespace) -> int:
             duration_seconds=args.duration_seconds,
         )
     print(_format_aster_capture_summary(summary))
+    return 0
+
+
+async def _capture_aster_depth_command(config, args: argparse.Namespace) -> int:
+    async with RecorderRuntime.from_config(config) as runtime:
+        summary = await capture_aster_depth(
+            runtime=runtime,
+            event_limit=args.event_limit,
+            duration_seconds=args.duration_seconds,
+        )
+    print(_format_aster_depth_capture_summary(summary))
     return 0
 
 

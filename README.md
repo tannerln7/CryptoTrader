@@ -190,13 +190,13 @@ Install the privileged service assets first. Do not use `--enable` yet; finish t
 sudo ./ops/install/install.sh --instance main
 ```
 
-Edit the installed env file so the service points at the repo, the repo-local Python, and the runtime config you just created:
+Inspect the installed env file after install. If `data/systemd/main/config.yaml` already exists, the installer now pre-fills `MARKET_RECORDER_CONFIG` with that runtime config path; update the env file only if you need a different repo, Python, or config path:
 
 ```bash
 sudoedit /etc/market-recorder/main.env
 ```
 
-Set these values in `/etc/market-recorder/main.env`:
+Confirm these values in `/etc/market-recorder/main.env`:
 
 ```dotenv
 MARKET_RECORDER_REPO_ROOT=/absolute/path/to/your/repo

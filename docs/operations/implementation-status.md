@@ -137,7 +137,7 @@ Status: implemented
 
 Description: The repo now has an unattended service runner, a runtime health-manifest writer, and a route-aware raw data quality report for the enabled sources.
 
-Notes: The current implementation keeps hardening lightweight: `run-service` supervises the enabled components, writes `manifests/runtime/health-<run_id>.json`, and `report-data-quality` validates the newest raw file per expected route while treating `forceOrder` and TradingView alerts as optional event-driven paths.
+Notes: The current implementation keeps hardening lightweight: `run-service` supervises the enabled components, writes `manifests/runtime/health-<run_id>.json`, and `report-data-quality` validates the newest raw file per expected route while treating `forceOrder` and TradingView alerts as optional event-driven paths. In bounded validation runs, the active hour file should be considered authoritative after graceful shutdown finalizes it; running `report-data-quality` or `validate-raw` against still-open files may report partial-write invalidity.
 
 Refs: `20b70dd`; `docs/phases/raw-recorder/phase7.md`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `src/market_recorder/service.py`; `src/market_recorder/quality.py`
 

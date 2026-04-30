@@ -282,6 +282,8 @@ Run a route-aware quality report after capture:
 market-recorder report-data-quality --stale-after-seconds 600
 ```
 
+For bounded validation runs, stop the worker before treating `validate-raw` or `report-data-quality` as authoritative. The current writer keeps the active hour file open during capture, so in-progress files may appear empty or partially written until shutdown finalizes them.
+
 ## Validation And Development
 
 Useful local commands:

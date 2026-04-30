@@ -341,10 +341,12 @@ Update docs when changing public commands, config keys, storage layout, schemas,
 
 Operational tracking docs are required for repo changes:
 
-* `docs/operations/change-log.md` must receive a short durable entry describing the change and relevant commit refs.
+* `docs/operations/change-log.md` must receive a short durable entry describing the code and documentation changes plus the relevant code/doc commit refs once those commits exist.
 * `docs/operations/implementation-status.md` must be updated when a change affects a feature, subsystem, status, known limitation, extension point, or planned next step.
-* These docs are part of the documentation commit, not the implementation commit. First commit the completed implementation changes, then update these operational docs with the implementation commit refs and commit the docs separately.
-* If docs-only changes are made, they still need a normal docs commit and a `change-log.md` entry referencing that docs commit. Do not create an extra follow-up entry just to record the same docs commit hash.
+* Commit completed implementation changes first.
+* Then update the relevant docs other than `docs/operations/change-log.md`, including `docs/operations/implementation-status.md` when needed, and commit those documentation changes separately.
+* Then update `docs/operations/change-log.md` with the relevant implementation/doc commit refs and commit the changelog change separately.
+* A standalone changelog-only follow-up commit does not need its own changelog entry or self-reference. The same rule applies when only `docs/operations/change-log.md` changed and no earlier code/doc commits were created for that task.
 
 Before final response, reconcile relevant docs:
 
@@ -382,6 +384,16 @@ For implementation work followed by documentation work, prefer entries that refe
 - `<impl_commit>` / `<docs_commit>` — added raw Aster stream capture and documented source/status updates.
 ```
 
+For docs-only work, reference the documentation commit:
+
+```markdown
+## YYYY-MM-DD
+
+- `<docs_commit>` — updated repo workflow instructions for changelog sequencing.
+```
+
+If the only remaining commit for a task edits `docs/operations/change-log.md`, do not add a second self-referential entry for that changelog-only commit.
+
 Keep entries short. This is not a full narrative and not a replacement for Git history.
 
 ### `docs/operations/implementation-status.md`
@@ -414,8 +426,12 @@ Commit sequence:
 
 1. Stage implementation changes into organized, purpose-specific commits.
 2. Commit implementation changes after code/config edits are complete and validated.
-3. Update relevant docs, including `docs/operations/change-log.md` and `docs/operations/implementation-status.md`, with references to the implementation commit(s).
-4. Commit documentation updates separately.
+3. Update relevant docs other than `docs/operations/change-log.md`, including `docs/operations/implementation-status.md` when needed, with references to the implementation commit(s).
+4. Commit the documentation updates separately.
+5. Update `docs/operations/change-log.md` with the relevant implementation/doc commit refs.
+6. Commit the changelog update separately.
+
+For docs-only tasks, start at step 3 with the non-changelog docs, then commit the changelog update last. If a task only changes `docs/operations/change-log.md`, commit it directly without adding a self-referential changelog entry.
 
 Use Conventional Commits:
 
@@ -501,6 +517,7 @@ Files changed
 Validation performed
 Implementation commit(s)
 Documentation commit(s)
+Changelog commit(s)
 Docs updated
 Operational tracking docs updated
 Assumptions or API behavior discovered
@@ -524,7 +541,7 @@ Before finishing a phase-scoped task, verify:
 * Relevant docs, example configs, plans, and operational tracking docs are updated.
 * Existing docs were checked before new entries were created.
 * Docs remain organized and consistent with current repo status.
-* Implementation and documentation commits are separated where applicable.
+* Implementation, documentation, and changelog commits are separated where applicable.
 * Outputs are deterministic/re-runnable where appropriate.
 * The change fits canonical structure and naming conventions.
 

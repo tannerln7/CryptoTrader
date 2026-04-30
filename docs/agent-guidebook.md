@@ -291,7 +291,12 @@ docs/operations/implementation-status.md
 
 Use `change-log.md` for durable commit-style history. Use `implementation-status.md` for a concise feature/status map showing what exists, what is incomplete, and what future agents need to know.
 
-Implementation changes and documentation/status updates should be committed separately as described in `AGENTS.md`.
+Commit workflow:
+
+* Commit code/config/test implementation changes first.
+* Then update and commit the relevant docs other than `docs/operations/change-log.md`.
+* Then update `docs/operations/change-log.md` with the implementation/doc commit refs and commit that changelog edit separately.
+* A changelog-only follow-up commit does not need its own changelog entry or self-reference.
 
 ---
 

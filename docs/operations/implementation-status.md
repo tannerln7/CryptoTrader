@@ -147,9 +147,9 @@ Status: implemented
 
 Description: The `market-recorder` CLI now defaults to service status and controls an installed systemd unit through a service-owned Unix socket with `start`, `stop`, `restart`, `status`, and `health` commands.
 
-Notes: The normal operator workflow is now `ops/install/install.sh` once, a group refresh once, then unprivileged `market-recorder start`, `status`, `health`, `restart`, and `stop` commands. The running service owns `/run/market-recorder/<instance>/control.sock`, answers only `ping`, `status`, `health`, and `stop`, and marks systemd readiness through direct `NOTIFY_SOCKET` writes only after the socket and health surface are ready. `run-service` remains the development and debugging foreground path.
+Notes: The normal operator workflow is now: create a runtime config from `config/config.example.yaml`, run `ops/install/install.sh` without `--enable`, edit `/etc/market-recorder/<instance>.env`, verify service-user access to the repo root, repo-local Python, and runtime config, optionally rerun the installer with `--enable` for boot-time startup, then use unprivileged `market-recorder start`, `status`, `health`, `restart`, and `stop` commands. The running service owns `/run/market-recorder/<instance>/control.sock`, answers only `ping`, `status`, `health`, and `stop`, and marks systemd readiness through direct `NOTIFY_SOCKET` writes only after the socket and health surface are ready. `run-service` remains the development and debugging foreground path.
 
-Refs: `e8c159b`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/cli.py`; `src/market_recorder/service_control.py`; `ops/systemd/market-recorder@.service`
+Refs: `0c7b256`; `e8c159b`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/cli.py`; `src/market_recorder/service_control.py`; `ops/systemd/market-recorder@.service`
 
 ### Install and service verification
 

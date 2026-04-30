@@ -161,10 +161,51 @@ Keep secrets and private endpoints out of committed config.
 
 ### Installed service workflow
 
-Install the service assets once:
+Capture the repo root once for the install and soak commands below:
 
 ```bash
-sudo ./ops/install/install.sh --instance main --enable
+REPO_ROOT=$(pwd)
+```
+
+Create a runtime config from the example before validating or starting anything:
+
+```bash
+mkdir -p data/systemd/main
+cp config/config.example.yaml data/systemd/main/config.yaml
+```
+
+Edit `data/systemd/main/config.yaml` for the instance you plan to soak, then validate it from the repo-local environment:
+
+```bash
+market-recorder validate-config --config "${REPO_ROOT}/data/systemd/main/config.yaml"
+```
+
+Install the privileged service assets first. Do not use `--enable` yet; finish the env and access checks first:
+
+```bash
+sudo ./ops/install/install.sh --instance main
+```
+
+Edit the installed env file so the service points at the repo, the repo-local Python, and the runtime config you just created:
+
+```bash
+sudoedit /etc/market-recorder/main.env
+```
+
+Set these values in `/etc/market-recorder/main.env`:
+
+```dotenv
+MARKET_RECORDER_REPO_ROOT=/absolute/path/to/your/repo
+MARKET_RECORDER_PYTHON=/absolute/path/to/your/repo/.venv/bin/python
+MARKET_RECORDER_CONFIG=/absolute/path/to/your/repo/data/systemd/main/config.yaml
+```
+
+Verify that the `market-recorder` service user can traverse the repo, execute the venv Python, and read the runtime config:
+
+```bash
+sudo -u market-recorder test -x "${REPO_ROOT}"
+sudo -u market-recorder test -x "${REPO_ROOT}/.venv/bin/python"
+sudo -u market-recorder test -r "${REPO_ROOT}/data/systemd/main/config.yaml"
 ```
 
 Refresh your group membership so the unprivileged CLI can use the control socket and polkit rule:
@@ -174,6 +215,12 @@ newgrp market-recorder
 ```
 
 Or log out and back in.
+
+If you want the service enabled on future boots, rerun the installer with `--enable` after the env file is correct. `--enable` only enables boot-time startup; it does not start the service immediately.
+
+```bash
+sudo ./ops/install/install.sh --instance main --enable
+```
 
 Show the current recorder-service state:
 

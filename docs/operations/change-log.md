@@ -10,7 +10,9 @@ Use it to record implemented repo changes and meaningful documentation updates i
 * Use one bullet per logical change group.
 * Prefer commit refs once Git history exists. Before Git is initialized, use a temporary marker such as `pre-git` or `uncommitted`.
 * Keep summaries short and concrete. Add a brief second sentence only when the reason matters for future readers.
+* Update this file after the relevant code and non-changelog documentation commits already exist.
 * When implementation and documentation land separately, list both refs on one line when that makes the history clearer.
+* Standalone changelog-only commits do not need their own changelog entry or self-reference.
 * Do not duplicate feature status here. Put ongoing subsystem state in `docs/operations/implementation-status.md`.
 
 ## Entry Template
@@ -23,6 +25,7 @@ Use it to record implemented repo changes and meaningful documentation updates i
 
 ## 2026-04-30
 
+- `cabbd6f` — updated AGENTS and the agent guidebook to require implementation commits first, non-changelog documentation commits second, and changelog updates last with no self-referential changelog-only entries.
 - `0c3d0e6` — refactored raw storage to keep the existing per-stream route layout while introducing writer-owned `.jsonl.zst.open` segments, atomic sealing to `.jsonl.zst`, route-resolved age and size rotation policies, sealed-file-first validation, and explicit handling for incomplete or stale active segments.
 - `45accd3` — refactored `market-recorder` into a service-first control surface and added a systemd template that supervises the foreground worker directly.
 - `13b3a6c` — cleaned stale scaffold metadata and prepared the bounded Phase 8 normalization handoff state for downstream work.

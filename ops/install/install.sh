@@ -138,7 +138,7 @@ write_text_file "${WRAPPER_DEST}" 0755 root root <<EOF
 set -euo pipefail
 export MARKET_RECORDER_LAYOUT=installed
 export MARKET_RECORDER_APP_ROOT=${APP_ROOT}
-exec ${APP_ROOT}/.venv/bin/market-recorder "\$@"
+exec ${APP_ROOT}/.venv/bin/python -m market_recorder.cli "\$@"
 EOF
 
 TMP_RUNTIME_CONFIG=$(mktemp)
@@ -221,8 +221,8 @@ if [[ "${DRY_RUN}" != "1" ]]; then
   if ! run_as_service_user market-recorder test -x "${APP_ROOT}"; then
     die "The market-recorder service user cannot access ${APP_ROOT}. Fix the install directory permissions, then rerun install."
   fi
-  if ! run_as_service_user market-recorder test -x "${APP_ROOT}/.venv/bin/market-recorder"; then
-    die "The market-recorder service user cannot execute ${APP_ROOT}/.venv/bin/market-recorder. Fix the installed app permissions, then rerun install."
+  if ! run_as_service_user market-recorder test -x "${APP_ROOT}/.venv/bin/python"; then
+    die "The market-recorder service user cannot execute ${APP_ROOT}/.venv/bin/python. Fix the installed app permissions, then rerun install."
   fi
   if ! run_as_service_user market-recorder test -r "${CONFIG_DEST}"; then
     die "The market-recorder service user cannot read ${CONFIG_DEST}. Fix the installed config permissions, then rerun install."

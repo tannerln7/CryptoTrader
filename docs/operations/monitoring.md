@@ -13,7 +13,7 @@ Use it to document what operators should watch, how health is assessed, what fai
 
 ## Current State
 
-The repo now has a runtime health manifest and a route-aware raw data quality report.
+The repo now has repo-scoped service state files, a runtime health manifest, journald-friendly systemd supervision assets, and a route-aware raw data quality report.
 
 ## Section Template
 
@@ -37,12 +37,12 @@ Refs: Relevant docs, scripts, configs, or commit refs.
 
 Status: implemented
 
-Signals: `data/manifests/runtime/health-<run_id>.json`; stdout logs from `market-recorder run-service`; newest raw file timestamps under the expected source routes; `market-recorder report-data-quality` exit status and per-route summaries.
+Signals: `data/service/recorder-service.json`; `market-recorder status`; `market-recorder health`; `data/manifests/runtime/health-<run_id>.json`; newest raw file timestamps under the expected source routes; `market-recorder report-data-quality` exit status and per-route summaries; `journalctl -u market-recorder@<instance>.service` when the worker is systemd-managed.
 
-Checks: Confirm the health manifest exists and its `component_statuses` show the enabled components. For bounded runs, expect `completed`. For active runs, expect `running`. Run `market-recorder report-data-quality --stale-after-seconds 600` to validate the newest file on each expected route.
+Checks: Confirm `market-recorder status` reports `running` for the expected PID and config. Confirm `market-recorder health` shows the expected enabled components. For systemd-managed instances, confirm `systemctl status market-recorder@<instance>.service` is `active (running)` and inspect `journalctl -u market-recorder@<instance>.service` for startup or shutdown failures. For bounded runs, expect runtime component statuses to reach `completed`. For active runs, expect `running`. Run `market-recorder report-data-quality --stale-after-seconds 600` to validate the newest file on each expected route.
 
-Failure Indicators: Missing required routes; stale routes; invalid raw files; a missing or stale health manifest; component statuses marked `failed`; repeated recorder-error raw files for the same route; no new raw files for a source that normally emits continuously.
+Failure Indicators: `market-recorder status` returns `stale` or `failed`; the service state file stops updating while the PID is absent; `systemctl status` shows restart loops or failed state for a systemd-managed instance; journald shows repeated startup or configuration failures; required routes are missing or stale; raw files are invalid; the health manifest is missing or stale for an active run; component statuses are `failed`; repeated recorder-error raw files appear for the same route; or no new raw files arrive for a source that normally emits continuously.
 
-Response Notes: Re-run `market-recorder validate-config`, check network reachability to the affected provider, inspect the newest `raw.recorder_error.v1` files for that source, and restart the bounded service run. Treat `forceOrder` and idle TradingView alert routes as optional unless the workload specifically expects them.
+Response Notes: Re-run `market-recorder validate-config`, inspect `journalctl -u market-recorder@<instance>.service` for systemd-managed failures, check network reachability to the affected provider, inspect the newest `raw.recorder_error.v1` files for that source, and use `systemctl restart market-recorder@<instance>.service` or the CLI lifecycle commands depending on which supervisor owns the worker. Treat `forceOrder` and idle TradingView alert routes as optional unless the workload specifically expects them.
 
-Refs: `20b70dd`; `docs/operations/deployment.md`; `docs/phases/raw-recorder/phase7.md`
+Refs: `45accd3`; `20b70dd`; `docs/operations/deployment.md`; `docs/phases/raw-recorder/phase7.md`; `src/market_recorder/service_control.py`; `ops/systemd/market-recorder@.service`

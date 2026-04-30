@@ -8,7 +8,7 @@ Status: in-progress
 
 The raw recorder architecture, contracts, and operator surfaces are now stable enough for normalization design and initial implementation.
 
-A bounded stability run and representative multi-source raw validation have been completed. The longer 24-to-48 hour soak target from Phase 8 is still pending, so this handoff should be treated as architecture-stable but not yet fully closed operationally.
+A bounded stability run and representative multi-source raw validation have been completed. The longer 24-to-48 hour soak target from Phase 8 is still pending, so this handoff should be treated as architecture-stable but not yet fully closed operationally. Operator surfaces now include the service-first CLI control flow and a shipped systemd template that supervises the same foreground worker path.
 
 ## Bounded Stability Evidence
 

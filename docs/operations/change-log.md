@@ -23,6 +23,7 @@ Use it to record implemented repo changes and meaningful documentation updates i
 
 ## 2026-04-30
 
+- `45accd3` — refactored `market-recorder` into a service-first control surface and added a systemd template that supervises the foreground worker directly.
 - `13b3a6c` — cleaned stale scaffold metadata and prepared the bounded Phase 8 normalization handoff state for downstream work.
 - `20b70dd` — implemented the Phase 7 unattended runtime with a shared service runner, periodic health manifests, and a route-aware raw data quality report.
 - `2eaf53a` — implemented the Phase 6 TradingView webhook path with bounded local serving, canonical raw alert storage, and explicit JSON versus plain-text preservation.

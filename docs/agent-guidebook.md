@@ -79,8 +79,10 @@ Canonical structure and naming live in `AGENTS.md`. Important paths:
 src/market_recorder/          # Python package
 src/market_recorder/contracts.py
 src/market_recorder/runtime.py
+src/market_recorder/service_control.py
 src/market_recorder/sources/  # provider adapters
 src/market_recorder/storage/  # raw writers, paths, manifests
+ops/systemd/                  # shipped systemd unit template and env example
 src/market_recorder/normalize/
 src/market_recorder/features/
 src/market_recorder/backtest/
@@ -116,8 +118,10 @@ Current implemented foundation:
 * `src/market_recorder/sources/aster_depth.py` provides periodic REST depth snapshots plus partial-depth and diff-depth capture, including restart-required continuity checks when diff-depth `pu` no longer matches the prior `u`.
 * `src/market_recorder/alerts/tradingview.py` provides the TradingView webhook receiver and preserves both JSON and plain-text request bodies as raw alert events.
 * `src/market_recorder/service.py` provides the unattended recorder supervisor and runtime health-manifest writer.
+* `src/market_recorder/service_control.py` provides the repo-scoped background service controller, lock and state files, detached worker launch path, and health/status loading helpers.
 * `src/market_recorder/quality.py` provides the route-aware raw data quality report used by operators.
-* `src/market_recorder/cli.py` currently supports `validate-config`, a runtime bootstrap check, sample raw writing, raw-file validation, bounded live Pyth capture, bounded live Aster capture, bounded Aster depth capture, TradingView webhook serving, unattended service execution, and raw-route quality reporting.
+* `src/market_recorder/cli.py` now defaults to service status and supports `start`, `stop`, `restart`, `status`, and `health`, while retaining `run-service`, runtime bootstrap, sample raw writing, raw-file validation, bounded live source capture, TradingView webhook serving, and raw-route quality reporting for development and debugging.
+* `ops/systemd/market-recorder@.service` ships a systemd template that supervises the foreground `service-worker` path directly so `systemctl` can own lifecycle while the CLI keeps health and state inspection.
 * `config/sources.example.yaml` now documents the Aster depth snapshot cadence under `aster.depth`.
 
 Raw recording is the first data layer. Its job is intentionally narrow:
@@ -134,7 +138,7 @@ reconnect on failure
 
 Raw recording should not calculate indicators, normalize away source fields, blend prices, run backtests, make trade decisions, or place orders.
 
-The repo now has bounded Phase 8 handoff evidence, and the current live source paths plus operator surfaces have been proven with Pyth, Aster non-depth streams, Aster depth plus snapshot capture, local TradingView-compatible webhook delivery, unattended service execution, and runtime health plus quality reporting. The remaining raw-recorder gap is longer soak evidence rather than missing architecture.
+The repo now has bounded Phase 8 handoff evidence, and the current live source paths plus operator surfaces have been proven with Pyth, Aster non-depth streams, Aster depth plus snapshot capture, local TradingView-compatible webhook delivery, repo-scoped background service control, systemd-compatible foreground supervision, and runtime health plus quality reporting. The remaining raw-recorder gap is longer soak evidence rather than missing architecture.
 
 Use these references for implementation details:
 

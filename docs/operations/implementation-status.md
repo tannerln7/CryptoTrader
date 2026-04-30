@@ -141,6 +141,16 @@ Notes: The current implementation keeps hardening lightweight: `run-service` sup
 
 Refs: `20b70dd`; `docs/phases/raw-recorder/phase7.md`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `src/market_recorder/service.py`; `src/market_recorder/quality.py`
 
+### Recorder service control surface
+
+Status: implemented
+
+Description: The `market-recorder` CLI now defaults to service status and manages a detached recorder worker with `start`, `stop`, `restart`, `status`, and `health` commands.
+
+Notes: Repo-scoped control files live under `data/service/` regardless of `--data-root` overrides, while runtime health manifests remain under the effective data root for the current run. The detached control surface wraps the same foreground worker path used by `run-service`, which remains available for development and debugging. The shipped systemd template also runs that foreground worker directly so `systemctl` can supervise the real process while CLI status and health remain usable.
+
+Refs: `45accd3`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/cli.py`; `src/market_recorder/service_control.py`; `ops/systemd/market-recorder@.service`
+
 ### Phase 8 — Stability run and normalization handoff
 
 Status: in-progress

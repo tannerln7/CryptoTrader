@@ -23,6 +23,7 @@ This phase should begin only after the required source capture paths are functio
 * Graceful shutdown and resource cleanup.
 * Health counters, manifests, or lightweight monitoring signals.
 * Data-quality scripts or reports for missing/corrupt output detection.
+* Deployment wrappers or service-unit templates when they supervise the same foreground worker path.
 * Deployment and monitoring docs.
 
 ## Out Of Scope
@@ -52,6 +53,7 @@ At the end of this phase, the recorder can run unattended for meaningful periods
 
 * Current aiohttp guidance favors application-managed lifecycle hooks such as `cleanup_ctx`, startup/cleanup signals, tracked background tasks, and explicit graceful shutdown handling over ad hoc untracked tasks.
 * If the webhook receiver remains aiohttp-based, operational deployment should account for reverse-proxy and forwarded-header concerns rather than assuming direct public exposure.
+* When shipping service files, prefer units that supervise the foreground worker directly instead of shelling through a self-daemonizing wrapper.
 * Hardening should remain lightweight until the recorder proves it needs more infrastructure.
 
 ## Docs To Keep In Sync

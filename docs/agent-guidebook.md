@@ -113,7 +113,9 @@ Current implemented foundation:
 * `src/market_recorder/storage/` now provides canonical raw-path generation, a streaming `.jsonl.zst` writer, and a streaming raw-file validator.
 * `src/market_recorder/sources/pyth.py` provides the first live source adapter, including Hermes SSE payload parsing and reconnect-aware capture.
 * `src/market_recorder/sources/aster.py` provides the non-depth combined-stream capture path for Aster market data.
+* `src/market_recorder/sources/aster_depth.py` provides periodic REST depth snapshots plus partial-depth and diff-depth capture, including restart-required continuity checks when diff-depth `pu` no longer matches the prior `u`.
 * `src/market_recorder/cli.py` currently supports `validate-config`, a runtime bootstrap check, sample raw writing, raw-file validation, bounded live Pyth capture, and bounded live Aster capture.
+* `config/sources.example.yaml` now documents the Aster depth snapshot cadence under `aster.depth`.
 
 Raw recording is the first data layer. Its job is intentionally narrow:
 
@@ -129,7 +131,7 @@ reconnect on failure
 
 Raw recording should not calculate indicators, normalize away source fields, blend prices, run backtests, make trade decisions, or place orders.
 
-The repo is now structurally ready for Phase 5 depth and snapshot work, and the first two live source paths have been proven with Pyth and Aster non-depth streams.
+The repo is now structurally ready for Phase 6 webhook capture work, and the current live source paths have been proven with Pyth, Aster non-depth streams, and Aster depth plus snapshot capture.
 
 Use these references for implementation details:
 

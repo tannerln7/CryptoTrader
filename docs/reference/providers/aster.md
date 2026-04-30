@@ -215,6 +215,7 @@ Recommended implementation split:
 Validation note:
 
 * A bounded live capture run through the repo's `capture-aster` command succeeded on 2026-04-30 for non-depth market streams and produced valid raw files under the canonical Aster path layout.
+* A bounded live capture run through the repo's `capture-aster-depth` command succeeded on 2026-04-30 for `depth20@100ms`, `depth@100ms`, and REST `depth` snapshots, producing valid raw files that preserved `lastUpdateId`, `U`, `u`, `pu`, bids, and asks.
 
 ---
 
@@ -452,6 +453,7 @@ Recorder implications:
 * Preserve `lastUpdateId`, `U`, `u`, `pu`, bids, asks, and both source and local timestamps.
 * Keep reconstruction out of the ingest path unless explicitly scoped later.
 * Validate depth stream names and behavior in practice before declaring the phase stable.
+* The current recorder implementation writes periodic REST snapshots under `raw/aster/rest/<symbol>/depth_snapshot_1000/...` and emits `raw.recorder_error.v1` records when diff-depth continuity indicates that downstream reconstruction should restart from a fresh snapshot.
 
 ---
 

@@ -2,7 +2,7 @@
 
 This repository is a long-lived market-data and trading-research workspace.
 
-The repo now includes the Phase 0 scaffold, the Phase 1 runtime-contract foundation, the Phase 2 storage and validation foundation, the Phase 3 live Pyth capture path, and the Phase 4 Aster non-depth market capture path.
+The repo now includes the Phase 0 scaffold, the Phase 1 runtime-contract foundation, the Phase 2 storage and validation foundation, the Phase 3 live Pyth capture path, the Phase 4 Aster non-depth market capture path, and the Phase 5 Aster depth and snapshot capture path.
 
 ## Current Status
 
@@ -11,8 +11,9 @@ The repo now includes the Phase 0 scaffold, the Phase 1 runtime-contract foundat
 - Phase 2 storage, rotation, and raw validation foundations: implemented
 - Phase 3 Pyth reference stream capture: implemented
 - Phase 4 Aster non-depth market stream capture: implemented
-- Aster depth/snapshot capture and TradingView capture: not implemented yet
-- Next implementation phase: Aster snapshots and depth capture
+- Phase 5 Aster snapshots and depth capture: implemented
+- TradingView capture: not implemented yet
+- Next implementation phase: TradingView alert and label capture
 
 ## Repo Defaults
 
@@ -87,6 +88,12 @@ Capture a bounded live Aster sample:
 market-recorder capture-aster --event-limit 8 --duration-seconds 30
 ```
 
+Capture bounded Aster depth streams and REST snapshots:
+
+```bash
+market-recorder capture-aster-depth --event-limit 12 --duration-seconds 30
+```
+
 ## Canonical Layout
 
 Important paths:
@@ -119,7 +126,7 @@ These files are safe examples only. Do not commit real secrets or private endpoi
 - Keep `data/` local and untracked except for committed placeholders.
 - Update the relevant docs when behavior, structure, or assumptions change.
 
-## Implemented Through Phase 4
+## Implemented Through Phase 5
 
 The repo currently provides:
 
@@ -133,6 +140,8 @@ The repo currently provides:
 - a streaming raw-file validator and sample-write CLI path
 - a live Pyth Hermes SSE capture command that writes raw reference events to canonical storage
 - a live Aster combined-stream capture command for non-depth market streams
+- a live Aster depth capture command that writes periodic REST depth snapshots plus partial-depth and diff-depth WebSocket streams
+- diff-depth continuity checks that emit restart-required recorder errors when `pu` continuity breaks
 - focused unit coverage for config loading, envelope helpers, runtime lifecycle, CLI behavior, time helpers, storage pathing, writer rotation, and raw validation
 
-The repo can now generate and validate sample raw files locally, capture bounded live Pyth events, and capture bounded live Aster non-depth events. Aster depth/snapshot work and TradingView integration are still pending.
+The repo can now generate and validate sample raw files locally, capture bounded live Pyth events, capture bounded live Aster non-depth events, and capture bounded live Aster depth plus snapshot data. TradingView integration and unattended runtime hardening are still pending.

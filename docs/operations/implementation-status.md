@@ -113,13 +113,13 @@ Refs: `5874f41`; `docs/phases/raw-recorder/phase4.md`; `docs/reference/providers
 
 ### Phase 5 — Aster snapshots and depth capture
 
-Status: planned
+Status: implemented
 
-Description: Aster REST depth snapshots and validated L2 stream capture are planned to support later book reconstruction and microstructure analysis.
+Description: The repo now has periodic Aster REST depth snapshots, bounded partial-depth and diff-depth capture, and validated raw output for live Aster L2 inputs.
 
-Notes: Preserve reconstruction-relevant update IDs and raw payloads without rebuilding books in the ingest path.
+Notes: The current implementation preserves `lastUpdateId`, `U`, `u`, `pu`, bids, and asks in raw payloads, records REST snapshots on the configured cadence, and emits restart-required recorder errors when diff-depth `pu` continuity breaks. It intentionally stops short of local order-book reconstruction.
 
-Refs: `4a88c06`; `docs/phases/raw-recorder/phase5.md`; `docs/reference/providers/aster.md`
+Refs: `2e0fe9f`; `docs/phases/raw-recorder/phase5.md`; `docs/reference/providers/aster.md`; `src/market_recorder/sources/aster_depth.py`
 
 ### Phase 6 — TradingView alert and label capture
 
@@ -127,7 +127,7 @@ Status: planned
 
 Description: TradingView or similar alert events are planned as raw label streams that can later be joined with market data.
 
-Notes: Keep alert payloads structured, authenticated where appropriate, and preserved as raw events.
+Notes: Keep alert payloads structured, authenticated where appropriate, and preserved as raw events. This is now the next implementation phase after Aster depth and snapshot capture.
 
 Refs: `4a88c06`; `docs/phases/raw-recorder/phase6.md`; `docs/reference/providers/tradingview.md`
 

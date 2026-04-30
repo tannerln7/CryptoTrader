@@ -204,12 +204,12 @@ MARKET_RECORDER_PYTHON=/absolute/path/to/your/repo/.venv/bin/python
 MARKET_RECORDER_CONFIG=/absolute/path/to/your/repo/data/systemd/main/config.yaml
 ```
 
-Verify that the `market-recorder` service user can traverse the repo, execute the venv Python, and read the runtime config:
+Verify that the `market-recorder` service user can traverse the repo, execute the venv Python, and read the runtime config. These checks print an explicit `ok` or `fail` result:
 
 ```bash
-sudo -u market-recorder test -x "${REPO_ROOT}"
-sudo -u market-recorder test -x "${REPO_ROOT}/.venv/bin/python"
-sudo -u market-recorder test -r "${REPO_ROOT}/data/systemd/main/config.yaml"
+sudo -u market-recorder test -x "${REPO_ROOT}" && echo "repo root ok" || echo "repo root fail"
+sudo -u market-recorder test -x "${REPO_ROOT}/.venv/bin/python" && echo "python ok" || echo "python fail"
+sudo -u market-recorder test -r "${REPO_ROOT}/data/systemd/main/config.yaml" && echo "config ok" || echo "config fail"
 ```
 
 If the repo access check fails, verify execute and traverse permissions on every parent directory in the repo path, not just on the repo directory itself.

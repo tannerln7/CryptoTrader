@@ -74,11 +74,11 @@ run_as_service_user() {
   shift
   if command_exists runuser; then
     runuser -u "$user" -- "$@"
-    return 0
+    return $?
   fi
   if command_exists su; then
     su -s /bin/sh "$user" -c "$(printf '%q ' "$@")"
-    return 0
+    return $?
   fi
   die "Neither runuser nor su is available for service-user validation."
 }

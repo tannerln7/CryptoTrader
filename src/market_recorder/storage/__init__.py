@@ -1,0 +1,1 @@
+"""Storage package placeholder for future raw writers and manifests."""

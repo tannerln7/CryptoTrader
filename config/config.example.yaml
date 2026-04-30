@@ -1,0 +1,19 @@
+# Phase 0 baseline runtime config.
+# This file is intentionally conservative and will be refined in Phase 1.
+
+runtime:
+  environment: development
+  timezone: UTC
+  data_root: ./data
+  sources_config: config/sources.example.yaml
+
+logging:
+  level: INFO
+  structured: false
+
+storage:
+  format: jsonl.zst
+  rotation: hourly
+
+validation:
+  enable_sample_checks: true

@@ -1,0 +1,1 @@
+"""Sources package placeholder for provider adapters."""

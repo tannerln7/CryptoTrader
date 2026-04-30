@@ -1,0 +1,41 @@
+# Phase 0 source examples.
+# These values are safe to commit and act as placeholders until Phase 1+ code formalizes the config schema.
+
+pyth:
+  enabled: true
+  provider: hermes
+  http_base_url: https://hermes.pyth.network
+  feeds:
+    - canonical_symbol: BTCUSD
+      source_symbol: BTC/USD
+      feed_id: 0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43
+    - canonical_symbol: ETHUSD
+      source_symbol: ETH/USD
+      feed_id: 0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace
+
+aster:
+  enabled: true
+  rest_base_url: https://fapi.asterdex.com
+  ws_base_url: wss://fstream.asterdex.com
+  symbols:
+    - canonical_symbol: BTCUSD
+      source_symbol: BTCUSDT
+    - canonical_symbol: ETHUSD
+      source_symbol: ETHUSDT
+  streams:
+    - aggTrade
+    - bookTicker
+    - markPrice@1s
+    - forceOrder
+    - kline_1m
+    - kline_5m
+    - kline_15m
+    - depth20@100ms
+    - depth@100ms
+
+tradingview:
+  enabled: false
+  webhook:
+    bind_host: 127.0.0.1
+    bind_port: 8000
+    path: /webhook/tradingview

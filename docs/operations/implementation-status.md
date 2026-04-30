@@ -157,9 +157,9 @@ Status: implemented
 
 Description: A focused install and service-control verification on 2026-04-30 covered fresh-machine install paths, `validate-config`, `write-sample`, `validate-raw` rejection of active `.jsonl.zst.open` segments, `systemd-analyze verify` of the shipped unit template, and a 3-minute bounded live `start`/`status`/`health`/`stop` cycle against a `/tmp` data root.
 
-Notes: The live cycle finished with all enabled components reporting `running` throughout, all active segments sealed on graceful stop (`KillSignal=SIGTERM` semantics), and `report-data-quality --stale-after-seconds 600` reporting 19 OK routes with only the activity-driven `forceOrder` routes optional-missing. The next operator-facing verification step should cover the shell installer, the service-owned control socket at `/run/market-recorder/<instance>/control.sock`, and the unprivileged CLI lifecycle flow as one workflow rather than treating systemctl as the primary surface.
+Notes: The live cycle finished with all enabled components reporting `running` throughout, all active segments sealed on graceful stop (`KillSignal=SIGTERM` semantics), and `report-data-quality --stale-after-seconds 600` reporting 19 OK routes with only the activity-driven `forceOrder` routes optional-missing. A follow-up config-loader fix now makes non-editable `python -m pip install .` installs resolve `market-recorder validate-config`, repo-relative sources configs, and explicit repo-local config paths against the runtime repo root instead of the installed package location under `.venv`. The next operator-facing verification step should cover the shell installer, the service-owned control socket at `/run/market-recorder/<instance>/control.sock`, and the unprivileged CLI lifecycle flow as one workflow rather than treating systemctl as the primary surface.
 
-Refs: `e8c159b`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/service_control.py`; `tests/unit/test_service_control.py`
+Refs: `2dda61c`; `e8c159b`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/config.py`; `tests/unit/test_config.py`; `src/market_recorder/service_control.py`; `tests/unit/test_service_control.py`
 
 ### Phase 8 — Stability run and normalization handoff
 

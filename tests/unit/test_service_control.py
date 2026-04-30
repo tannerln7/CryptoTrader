@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 from market_recorder.config import apply_runtime_overrides, load_config
+from market_recorder.control_socket import request_control
 from market_recorder.service_control import (
-    RecorderServiceState,
     build_service_launch_spec,
     build_service_worker_command,
     build_service_worker_env,
-    default_service_paths,
-    read_service_state,
+    default_instance,
+    default_socket_path,
     read_service_status,
-  run_service_worker_foreground,
-    write_service_state,
+    run_service_worker_foreground,
 )
 
 
@@ -74,46 +74,9 @@ validation:
     assert config.runtime.data_root != overridden.runtime.data_root
 
 
-def test_service_paths_are_repo_scoped(tmp_path: Path) -> None:
-    paths = default_service_paths(tmp_path)
-
-    assert paths.state_path == tmp_path / "data" / "service" / "recorder-service.json"
-    assert paths.lock_path == tmp_path / "data" / "service" / "recorder-service.lock"
-    assert paths.log_path == tmp_path / "data" / "service" / "recorder-service.log"
-
-
-def test_service_state_round_trip_and_launch_spec(tmp_path: Path) -> None:
-    state_path = tmp_path / "state.json"
-    state = RecorderServiceState(
-        pid=1234,
-        status="running",
-        run_id="recorder-test",
-        config_path=tmp_path / "config.yaml",
-        sources_path=tmp_path / "sources.yaml",
-        repo_root=tmp_path,
-        data_root=tmp_path / "runtime-data",
-        log_level="INFO",
-        structured_logging=False,
-        health_interval_seconds=15.0,
-        duration_seconds=60.0,
-        health_path_override=None,
-        health_path=tmp_path / "runtime-data" / "health.json",
-        worker_log_path=tmp_path / "data" / "service" / "recorder-service.log",
-        started_at_utc="2026-04-30T00:00:00Z",
-        updated_at_utc="2026-04-30T00:00:10Z",
-        finished_at_utc=None,
-        message="Recorder service is running.",
-    )
-
-    write_service_state(state_path, state)
-    loaded = read_service_state(state_path)
-    assert loaded == state
-
-    launch_spec = loaded.to_launch_spec()
-    assert launch_spec.repo_root == tmp_path
-    assert launch_spec.data_root == tmp_path / "runtime-data"
-    assert launch_spec.health_interval_seconds == 15.0
-    assert launch_spec.duration_seconds == 60.0
+def test_default_socket_path_uses_instance() -> None:
+    assert default_instance() == "main"
+    assert default_socket_path("copilot") == Path("/run/market-recorder/copilot/control.sock")
 
 
 def test_build_service_worker_command_uses_module_invocation(tmp_path: Path) -> None:
@@ -180,19 +143,43 @@ def test_build_service_worker_env_forces_unbuffered_python() -> None:
     assert preserved["PYTHONUNBUFFERED"] == "0"
 
 
-def test_read_service_status_reports_stopped_without_state(tmp_path: Path) -> None:
-    status = read_service_status(tmp_path)
+def test_read_service_status_reports_stopped_without_socket() -> None:
+    status = read_service_status("main")
 
     assert status.state == "stopped"
     assert status.pid is None
-    assert status.service_state is None
+    assert status.available_via_socket is False
 
 
-def test_run_service_worker_foreground_writes_terminal_state(tmp_path: Path, monkeypatch) -> None:
+def test_run_service_worker_foreground_exposes_control_socket(tmp_path: Path, monkeypatch) -> None:
     async def fake_run_recorder_service(**kwargs):
         runtime = kwargs["runtime"]
-        assert runtime.run_id.startswith("recorder-")
-        return {"kind": "service"}
+        health_path = kwargs["health_path"]
+        health_path.parent.mkdir(parents=True, exist_ok=True)
+        health_path.write_text(
+            json.dumps(
+                {
+                    "run_id": runtime.run_id,
+                    "updated_at_utc": "2026-04-30T00:00:05Z",
+                    "enabled_components": [],
+                    "component_statuses": {},
+                    "component_outputs": {},
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        on_ready = kwargs.get("on_ready")
+        if on_ready is not None:
+            maybe_result = on_ready()
+            if maybe_result is not None:
+                await maybe_result
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            raise
 
     monkeypatch.setattr("market_recorder.service_control.run_recorder_service", fake_run_recorder_service)
 
@@ -241,18 +228,40 @@ validation:
     )
 
     config = load_config(config_path, repo_root=tmp_path)
-    exit_code = asyncio.run(
-        run_service_worker_foreground(
-            config,
-            health_interval_seconds=1.0,
-            health_path=None,
-            duration_seconds=0.01,
-        ),
-    )
-    paths = default_service_paths(tmp_path)
-    state = read_service_state(paths.state_path)
+    socket_path = tmp_path / "runtime" / "control.sock"
+
+    async def exercise_worker() -> int:
+        worker_task = asyncio.create_task(
+            run_service_worker_foreground(
+                config,
+                health_interval_seconds=1.0,
+                health_path=None,
+                duration_seconds=None,
+            ),
+        )
+
+        deadline = asyncio.get_running_loop().time() + 5.0
+        while not socket_path.exists():
+            if asyncio.get_running_loop().time() >= deadline:
+                raise AssertionError("Control socket was not created in time")
+            await asyncio.sleep(0.05)
+
+        ping_response = await asyncio.to_thread(request_control, socket_path, "ping")
+        status_response = await asyncio.to_thread(request_control, socket_path, "status")
+        health_response = await asyncio.to_thread(request_control, socket_path, "health")
+        stop_response = await asyncio.to_thread(request_control, socket_path, "stop")
+        exit_code = await worker_task
+
+        assert ping_response["ok"] is True
+        assert ping_response["message"] == "pong"
+        assert status_response["status"]["status"] == "running"
+        assert health_response["health"]["run_id"].startswith("recorder-")
+        assert stop_response["status"]["status"] == "stopping"
+        return exit_code
+
+    monkeypatch.setenv("MARKET_RECORDER_CONTROL_SOCKET", str(socket_path))
+    monkeypatch.setenv("MARKET_RECORDER_INSTANCE", "test")
+    exit_code = asyncio.run(exercise_worker())
 
     assert exit_code == 0
-    assert state is not None
-    assert state.status == "stopped"
-    assert state.run_id is not None
+    assert not socket_path.exists()

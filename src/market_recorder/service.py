@@ -8,6 +8,7 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from .alerts import TradingViewWebhookService
@@ -40,6 +41,7 @@ async def run_recorder_service(
 	duration_seconds: float | None = None,
 	health_interval_seconds: float = 10.0,
 	health_path: Path | None = None,
+	on_ready: Callable[[], Awaitable[None] | None] | None = None,
 ) -> RecorderServiceSummary:
 	component_names = _enabled_component_names(runtime)
 	if not component_names:
@@ -95,6 +97,14 @@ async def run_recorder_service(
 				"tradingview.webhook",
 				_run_started_tradingview_service(tradingview_service, duration_seconds=duration_seconds),
 			)
+
+		await write_runtime_health_snapshot(
+			runtime=runtime,
+			component_tasks=component_tasks,
+			started_at_utc=started_at_utc,
+			health_path=resolved_health_path,
+		)
+		await _invoke_on_ready(on_ready)
 
 		await asyncio.gather(*(component_tasks[name] for name in component_tasks))
 		for name in component_tasks:
@@ -230,6 +240,16 @@ async def _run_started_tradingview_service(
 ) -> Any:
 	await service.wait(duration_seconds=duration_seconds)
 	return service.build_summary()
+
+
+async def _invoke_on_ready(
+	on_ready: Callable[[], Awaitable[None] | None] | None,
+) -> None:
+	if on_ready is None:
+		return
+	result = on_ready()
+	if result is not None:
+		await result
 
 
 def _create_tracked_task(

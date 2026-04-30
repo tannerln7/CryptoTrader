@@ -13,7 +13,6 @@ from . import __version__
 from .alerts import TradingViewWebhookSummary, serve_tradingview_webhook
 from .config import (
     DEFAULT_CONFIG_PATH,
-    REPO_ROOT,
     ConfigError,
     apply_runtime_overrides,
     load_config,
@@ -24,15 +23,15 @@ from .quality import DataQualityReport, build_data_quality_report
 from .runtime import RecorderRuntime
 from .service import RecorderServiceSummary, run_recorder_service
 from .service_control import (
-    RecorderServiceLaunchSpec,
     RecorderServiceStatus,
     ServiceControlError,
-    build_service_launch_spec,
+    default_instance,
     load_service_health,
     read_service_status,
+    restart_service,
     run_service_worker_foreground,
-    start_background_service,
-    stop_background_service,
+    start_service,
+    stop_service,
 )
 from .sources.aster import AsterCaptureSummary, capture_aster
 from .sources.aster_depth import AsterDepthCaptureSummary, capture_aster_depth
@@ -57,40 +56,38 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the recorder package version and exit.",
     )
+    parser.add_argument(
+        "--instance",
+        default=default_instance(),
+        help="Recorder service instance name for service control commands.",
+    )
     _add_config_arguments(parser)
 
     subparsers = parser.add_subparsers(dest="command")
-    start_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "start",
-        help="Start the recorder service in the background.",
+        help="Start the installed recorder service.",
     )
-    _add_config_arguments(start_parser, suppress_defaults=True)
-    _add_service_control_arguments(start_parser)
 
-    stop_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "stop",
         help="Stop the running recorder service.",
     )
-    _add_config_arguments(stop_parser, suppress_defaults=True)
 
-    restart_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "restart",
         help="Restart the recorder service.",
     )
-    _add_config_arguments(restart_parser, suppress_defaults=True)
-    _add_service_control_arguments(restart_parser)
 
-    status_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "status",
         help="Show recorder service status.",
     )
-    _add_config_arguments(status_parser, suppress_defaults=True)
 
-    health_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "health",
         help="Show summarized recorder service health.",
     )
-    _add_config_arguments(health_parser, suppress_defaults=True)
 
     validate_config_parser = subparsers.add_parser(
         "validate-config",
@@ -258,6 +255,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     command = args.command or "status"
 
+    if command in {"start", "stop", "restart", "status", "health"}:
+        override_error = _service_control_override_error(command, args)
+        if override_error is not None:
+            print(override_error, file=sys.stderr)
+            return 2
+
     if args.command == "validate-raw":
         try:
             summary = validate_raw_file(Path(args.path))
@@ -268,11 +271,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if command == "status":
-        return _status_command(include_hint=args.command is None)
+        return _status_command(args.instance, include_hint=args.command is None)
     if command == "stop":
-        return _stop_command()
+        return _stop_command(args.instance)
     if command == "health":
-        return _health_command()
+        return _health_command(args.instance)
+    if command == "start":
+        return _start_command(args.instance)
+    if command == "restart":
+        return _restart_command(args.instance)
 
     try:
         config = load_config(args.config or DEFAULT_CONFIG_PATH, sources_path=args.sources)
@@ -288,10 +295,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     if command == "validate-config":
         print(_format_config_summary(config))
         return 0
-    if command == "start":
-        return _start_command(config, args)
-    if command == "restart":
-        return _restart_command(config, args)
     if command == "write-sample":
         print(_write_sample_output(config, args))
         return 0
@@ -435,26 +438,29 @@ def _format_service_summary(summary: RecorderServiceSummary) -> str:
 def _format_service_status(status: RecorderServiceStatus, *, include_hint: bool = False) -> str:
     lines = [
         "Recorder service status",
+        f"Instance: {status.instance}",
+        f"Unit: {status.unit_name}",
         f"State: {status.state}",
-        f"Service log: {status.log_path}",
-        f"State file: {status.state_path}",
+        f"Control socket: {status.socket_path}",
     ]
     if status.pid is not None:
         lines.append(f"PID: {status.pid}")
     if status.run_id is not None:
         lines.append(f"Run ID: {status.run_id}")
-    if status.service_state is not None:
-        state = status.service_state
-        lines.append(f"Config: {state.config_path}")
-        lines.append(f"Sources: {state.sources_path}")
-        lines.append(f"Data root: {state.data_root}")
-        if state.started_at_utc is not None:
-            lines.append(f"Started: {state.started_at_utc}")
-        lines.append(f"Updated: {state.updated_at_utc}")
-        if state.finished_at_utc is not None:
-            lines.append(f"Finished: {state.finished_at_utc}")
-        if state.health_path is not None:
-            lines.append(f"Health manifest: {state.health_path}")
+    if status.config_path is not None:
+        lines.append(f"Config: {status.config_path}")
+    if status.sources_path is not None:
+        lines.append(f"Sources: {status.sources_path}")
+    if status.data_root is not None:
+        lines.append(f"Data root: {status.data_root}")
+    if status.started_at_utc is not None:
+        lines.append(f"Started: {status.started_at_utc}")
+    if status.updated_at_utc is not None:
+        lines.append(f"Updated: {status.updated_at_utc}")
+    if status.finished_at_utc is not None:
+        lines.append(f"Finished: {status.finished_at_utc}")
+    if status.health_path is not None:
+        lines.append(f"Health manifest: {status.health_path}")
     if status.message:
         lines.append(f"Message: {status.message}")
     if include_hint and not status.is_running:
@@ -465,14 +471,15 @@ def _format_service_status(status: RecorderServiceStatus, *, include_hint: bool 
 def _format_service_health(status: RecorderServiceStatus, payload: dict[str, Any] | None) -> str:
     lines = [
         "Recorder service health",
+        f"Instance: {status.instance}",
         f"Service state: {status.state}",
+        f"Control socket: {status.socket_path}",
     ]
     if status.run_id is not None:
         lines.append(f"Run ID: {status.run_id}")
 
-    state = status.service_state
-    if state is not None and state.health_path is not None:
-        lines.append(f"Health manifest: {state.health_path}")
+    if status.health_path is not None:
+        lines.append(f"Health manifest: {status.health_path}")
 
     if payload is None:
         lines.append("Health data: unavailable")
@@ -621,7 +628,7 @@ async def _serve_tradingview_command(config, args: argparse.Namespace) -> int:
 
 
 async def _run_service_command(config, args: argparse.Namespace) -> int:
-    running_status = read_service_status(REPO_ROOT)
+    running_status = read_service_status(args.instance)
     if running_status.is_running:
         print(_format_service_status(running_status), file=sys.stderr)
         return 1
@@ -701,9 +708,9 @@ def _add_service_control_arguments(
     )
 
 
-def _status_command(*, include_hint: bool = False) -> int:
+def _status_command(instance: str, *, include_hint: bool = False) -> int:
     try:
-        status = read_service_status(REPO_ROOT)
+        status = read_service_status(instance)
     except ServiceControlError as exc:
         print(f"Service control error: {exc}", file=sys.stderr)
         return 1
@@ -712,9 +719,9 @@ def _status_command(*, include_hint: bool = False) -> int:
     return 0 if status.is_running else 1
 
 
-def _stop_command() -> int:
+def _stop_command(instance: str) -> int:
     try:
-        status = stop_background_service(REPO_ROOT)
+        status = stop_service(instance)
     except ServiceControlError as exc:
         print(f"Service control error: {exc}", file=sys.stderr)
         return 1
@@ -723,9 +730,9 @@ def _stop_command() -> int:
     return 0
 
 
-def _health_command() -> int:
+def _health_command(instance: str) -> int:
     try:
-        status, payload = load_service_health(REPO_ROOT)
+        status, payload = load_service_health(instance)
     except ServiceControlError as exc:
         print(f"Service control error: {exc}", file=sys.stderr)
         return 1
@@ -734,10 +741,9 @@ def _health_command() -> int:
     return 0 if status.is_running and payload is not None else 1
 
 
-def _start_command(config, args: argparse.Namespace) -> int:
+def _start_command(instance: str) -> int:
     try:
-        launch_spec = _build_launch_spec(config, args)
-        status = start_background_service(launch_spec)
+        status = start_service(instance)
     except ServiceControlError as exc:
         print(f"Service control error: {exc}", file=sys.stderr)
         return 1
@@ -746,14 +752,9 @@ def _start_command(config, args: argparse.Namespace) -> int:
     return 0
 
 
-def _restart_command(config, args: argparse.Namespace) -> int:
+def _restart_command(instance: str) -> int:
     try:
-        current_status = read_service_status(REPO_ROOT)
-        if current_status.is_running:
-            stop_background_service(REPO_ROOT)
-
-        launch_spec = _build_restart_launch_spec(config, args, current_status)
-        status = start_background_service(launch_spec)
+        status = restart_service(instance)
     except ServiceControlError as exc:
         print(f"Service control error: {exc}", file=sys.stderr)
         return 1
@@ -762,37 +763,19 @@ def _restart_command(config, args: argparse.Namespace) -> int:
     return 0
 
 
-def _build_launch_spec(config, args: argparse.Namespace) -> RecorderServiceLaunchSpec:
-    return build_service_launch_spec(
-        config,
-        health_interval_seconds=args.health_interval_seconds,
-        health_path=args.health_path,
-        duration_seconds=args.duration_seconds,
-    )
-
-
-def _build_restart_launch_spec(
-    config,
-    args: argparse.Namespace,
-    current_status: RecorderServiceStatus,
-) -> RecorderServiceLaunchSpec:
-    if not _has_service_start_overrides(args) and current_status.service_state is not None:
-        return current_status.service_state.to_launch_spec()
-    return _build_launch_spec(config, args)
-
-
-def _has_service_start_overrides(args: argparse.Namespace) -> bool:
-    return any(
-            value is not None
-            for value in (
-                args.config,
-                args.sources,
-                args.data_root,
-                args.log_level,
-                args.health_interval_seconds,
-                args.health_path,
-                args.duration_seconds,
-            )
+def _service_control_override_error(command: str, args: argparse.Namespace) -> str | None:
+    if command not in {"start", "stop", "restart", "status", "health"}:
+        return None
+    used_overrides = [
+        name
+        for name in ("config", "sources", "data_root", "log_level")
+        if getattr(args, name, None) is not None
+    ]
+    if not used_overrides:
+        return None
+    return (
+        "Service control commands do not accept runtime config overrides. "
+        f"Edit /etc/market-recorder/{args.instance}.env or use a development/debug command instead."
     )
 
 

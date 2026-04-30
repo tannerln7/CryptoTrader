@@ -143,6 +143,7 @@ class RawJsonlZstWriter:
             run_id=self.run_id,
         )
         os.replace(active_path, sealed_path)
+        os.chmod(sealed_path, 0o640)
         file_size_bytes = sealed_path.stat().st_size
         sealed_segment = RawSegmentSealResult(
             active_path=active_path,
@@ -171,6 +172,7 @@ class RawJsonlZstWriter:
         )
         next_path.parent.mkdir(parents=True, exist_ok=True)
         self._file_handle = next_path.open("xb")
+        os.fchmod(self._file_handle.fileno(), 0o600)
         compressor = zstandard.ZstdCompressor(level=self.compression_level, write_checksum=True)
         self._writer = compressor.stream_writer(self._file_handle)
         self._current_path = next_path

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import stat
 from pathlib import Path
 
 import pytest
@@ -23,12 +24,14 @@ def test_writer_uses_active_open_path_and_refuses_validation_before_seal(tmp_pat
 
     assert path.exists()
     assert path.name.endswith(".jsonl.zst.open")
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
     with pytest.raises(ValueError, match="Refusing to validate active raw segment"):
         validate_raw_file(path)
 
     writer.close()
 
     sealed_path = writer.sealed_segments[0].sealed_path
+    assert stat.S_IMODE(sealed_path.stat().st_mode) == 0o640
     assert validate_raw_file(sealed_path).record_count == 1
 
 

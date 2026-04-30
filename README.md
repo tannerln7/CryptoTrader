@@ -165,56 +165,35 @@ Keep secrets and private endpoints out of committed config.
 
 ### Installed service workflow
 
-Capture the repo root once for the install and soak commands below:
+The installed product path defaults to the `production` instance and uses these managed locations:
+
+- `/opt/CryptoTrader` for the installer-managed app and virtualenv
+- `/usr/local/bin/market-recorder` for the operator-facing launcher
+- `/etc/CryptoTrader/production.yaml` for the runtime config
+- `/etc/CryptoTrader/production.sources.yaml` for enabled sources
+- `/etc/CryptoTrader/production.env` for systemd overrides
+- `/var/lib/market-recorder/production` for persisted state and raw output
+- `/run/market-recorder/production/control.sock` for the service-owned control socket
+
+Install the managed layout first. On Debian-family hosts, the installer will use `apt-get` to add `python3` and `python3-venv` if they are missing.
 
 ```bash
-REPO_ROOT=$(pwd)
+sudo ./ops/install/install.sh
 ```
 
-Create a runtime config from the example before validating or starting anything:
+Review the generated instance files. Re-running the installer preserves existing instance files and writes updated defaults to adjacent `.new` files when the shipped templates change.
 
 ```bash
-mkdir -p data/systemd/main
-cp config/config.example.yaml data/systemd/main/config.yaml
+sudoedit /etc/CryptoTrader/production.yaml
+sudoedit /etc/CryptoTrader/production.sources.yaml
+sudoedit /etc/CryptoTrader/production.env
 ```
 
-Edit `data/systemd/main/config.yaml` for the instance you plan to soak, then validate it from the repo-local environment:
+Validate the installed instance config through the production launcher:
 
 ```bash
-market-recorder validate-config --config "${REPO_ROOT}/data/systemd/main/config.yaml"
+market-recorder --instance production validate-config --config /etc/CryptoTrader/production.yaml
 ```
-
-Install the privileged service assets first. Do not use `--enable` yet; finish the env and access checks first:
-
-```bash
-sudo ./ops/install/install.sh --instance main
-```
-
-Inspect the installed env file after install. If `data/systemd/main/config.yaml` already exists, the installer now pre-fills `MARKET_RECORDER_CONFIG` with that runtime config path; update the env file only if you need a different repo, Python, or config path:
-
-```bash
-sudoedit /etc/market-recorder/main.env
-```
-
-Confirm these values in `/etc/market-recorder/main.env`:
-
-```dotenv
-MARKET_RECORDER_REPO_ROOT=/absolute/path/to/your/repo
-MARKET_RECORDER_PYTHON=/absolute/path/to/your/repo/.venv/bin/python
-MARKET_RECORDER_CONFIG=/absolute/path/to/your/repo/data/systemd/main/config.yaml
-```
-
-Verify that the `market-recorder` service user can traverse the repo, execute the venv Python, and read the runtime config. These checks print an explicit `ok` or `fail` result:
-
-```bash
-sudo -u market-recorder test -x "${REPO_ROOT}" && echo "repo root ok" || echo "repo root fail"
-sudo -u market-recorder test -x "${REPO_ROOT}/.venv/bin/python" && echo "python ok" || echo "python fail"
-sudo -u market-recorder test -r "${REPO_ROOT}/data/systemd/main/config.yaml" && echo "config ok" || echo "config fail"
-```
-
-`install.sh` now runs the same service-user checks internally and exits if they fail. The explicit commands above are still useful because they show which path is blocked.
-
-If the repo access check fails, verify execute and traverse permissions on every parent directory in the repo path, not just on the repo directory itself.
 
 Refresh your group membership so the unprivileged CLI can use the control socket and polkit rule:
 
@@ -224,11 +203,13 @@ newgrp market-recorder
 
 Or log out and back in.
 
-If you want the service enabled on future boots, rerun the installer with `--enable` after the env file is correct. `--enable` only enables boot-time startup; it does not start the service immediately.
+If you want the service enabled on future boots, rerun the installer with `--enable` after the config is correct. `--enable` only enables boot-time startup; it does not start the service immediately.
 
 ```bash
-sudo ./ops/install/install.sh --instance main --enable
+sudo ./ops/install/install.sh --enable
 ```
+
+Use `--instance <name>` when you want an installed instance other than `production`.
 
 Show the current recorder-service state:
 
@@ -256,7 +237,27 @@ market-recorder restart
 market-recorder stop
 ```
 
-The service lifecycle commands above are the normal operator workflow. They do not accept runtime config overrides; edit `/etc/market-recorder/<instance>.env` instead.
+The service lifecycle commands above are the normal operator workflow. They do not accept runtime overrides; edit `/etc/CryptoTrader/<instance>.yaml`, `/etc/CryptoTrader/<instance>.sources.yaml`, or `/etc/CryptoTrader/<instance>.env` instead.
+
+### Checkout workflow
+
+Development commands should use the checkout-mode wrappers under `scripts/dev/`. They force `MARKET_RECORDER_LAYOUT=checkout`, pin `MARKET_RECORDER_REPO_ROOT` to the current checkout, and prepend `src/` to `PYTHONPATH` so the CLI always runs the live source tree rather than a previously installed wheel.
+
+```bash
+./scripts/dev/market-recorder validate-config
+```
+
+If you need the same checkout-mode environment for other tools, source the helper first:
+
+```bash
+source scripts/dev/env.sh
+```
+
+Then run the repo-local command you need, such as:
+
+```bash
+python -m pytest tests/unit -q
+```
 
 ### Advanced troubleshooting
 
@@ -265,11 +266,17 @@ The repo still ships the underlying systemd and polkit assets under `ops/systemd
 For troubleshooting only, inspect the unit and journal directly:
 
 ```bash
-systemctl status market-recorder@main.service
-journalctl -u market-recorder@main.service -f
+systemctl status market-recorder@production.service
+journalctl -u market-recorder@production.service -f
 ```
 
-If you need to validate or inspect the installed unit definition itself:
+Because the unit references absolute installed paths, validate it on an installed host after `/usr/local/bin/market-recorder` and `/opt/CryptoTrader` exist:
+
+```bash
+sudo systemd-analyze verify /etc/systemd/system/market-recorder@.service
+```
+
+The shipped unit and env example live at:
 
 ```text
 ops/systemd/market-recorder@.service
@@ -372,15 +379,16 @@ Useful local commands:
 ```bash
 pytest tests/unit -q
 ruff check .
+./scripts/dev/market-recorder validate-config
+./scripts/dev/market-recorder report-data-quality --stale-after-seconds 600
 market-recorder status
 market-recorder health
-market-recorder validate-config
-market-recorder report-data-quality --stale-after-seconds 600
 ```
 
 Development conventions:
 
 - Use the repo-local `.venv` as the Python interpreter.
+- Use `scripts/dev/market-recorder` or `source scripts/dev/env.sh` for checkout-mode CLI work.
 - Treat `pyproject.toml` as the main project metadata source of truth.
 - Keep `data/` local and untracked.
 - Preserve provider source payloads in raw capture paths.

@@ -141,15 +141,25 @@ Notes: The current implementation keeps hardening lightweight: `run-service` sup
 
 Refs: `20b70dd`; `0c3d0e6`; `docs/phases/raw-recorder/phase7.md`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `src/market_recorder/service.py`; `src/market_recorder/quality.py`
 
+### Checkout-mode developer wrappers
+
+Status: implemented
+
+Description: The repo now ships explicit checkout-mode helper scripts that force source-first development commands to run against the current checkout instead of an installed wheel.
+
+Notes: `scripts/dev/env.sh` exports `MARKET_RECORDER_LAYOUT=checkout`, pins `MARKET_RECORDER_REPO_ROOT` to the checkout root, unsets the installed app-root override, and prepends `src/` to `PYTHONPATH`. `scripts/dev/market-recorder` wraps the repo-local `.venv` interpreter with that environment so `validate-config` and other CLI commands work from any working directory.
+
+Refs: `7b56d9f`; `scripts/dev/env.sh`; `scripts/dev/market-recorder`; `scripts/README.md`
+
 ### Recorder service control surface
 
 Status: implemented
 
 Description: The `market-recorder` CLI now defaults to service status and controls an installed systemd unit through a service-owned Unix socket with `start`, `stop`, `restart`, `status`, and `health` commands.
 
-Notes: The normal operator workflow is now: create a runtime config from `config/config.example.yaml`, run `ops/install/install.sh` without `--enable`, inspect `/etc/market-recorder/<instance>.env`, verify service-user access to the repo root, repo-local Python, and runtime config, optionally rerun the installer with `--enable` for boot-time startup, then use unprivileged `market-recorder start`, `status`, `health`, `restart`, and `stop` commands. When `data/systemd/<instance>/config.yaml` already exists, the installer pre-fills `MARKET_RECORDER_CONFIG` with that instance path instead of the example config, and the installer now aborts if its service-user access checks fail instead of continuing with an unreadable repo or config path. The running service owns `/run/market-recorder/<instance>/control.sock`, answers only `ping`, `status`, `health`, and `stop`, and marks systemd readiness through direct `NOTIFY_SOCKET` writes only after the socket and health surface are ready. `run-service` remains the development and debugging foreground path.
+Notes: Fresh installs now default to the `production` instance and place the installer-managed app under `/opt/CryptoTrader`, the operator launcher under `/usr/local/bin/market-recorder`, and live instance config under `/etc/CryptoTrader/<instance>.yaml`, `/etc/CryptoTrader/<instance>.sources.yaml`, and `/etc/CryptoTrader/<instance>.env`. Re-running the installer preserves existing instance files and writes updated defaults to adjacent `.new` files when templates change. The running service owns `/run/market-recorder/<instance>/control.sock`, answers only `ping`, `status`, `health`, and `stop`, and marks systemd readiness through direct `NOTIFY_SOCKET` writes only after the socket and health surface are ready. `run-service` remains the development and debugging foreground path, while checkout-mode CLI usage is explicit through `scripts/dev`.
 
-Refs: `0c7b256`; `e8c159b`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/cli.py`; `src/market_recorder/service_control.py`; `ops/systemd/market-recorder@.service`
+Refs: `7b56d9f`; `0c7b256`; `e8c159b`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/cli.py`; `src/market_recorder/service_control.py`; `ops/systemd/market-recorder@.service`
 
 ### Install and service verification
 
@@ -157,9 +167,9 @@ Status: implemented
 
 Description: A focused install and service-control verification on 2026-04-30 covered fresh-machine install paths, `validate-config`, `write-sample`, `validate-raw` rejection of active `.jsonl.zst.open` segments, `systemd-analyze verify` of the shipped unit template, and a 3-minute bounded live `start`/`status`/`health`/`stop` cycle against a `/tmp` data root.
 
-Notes: The live cycle finished with all enabled components reporting `running` throughout, all active segments sealed on graceful stop (`KillSignal=SIGTERM` semantics), and `report-data-quality --stale-after-seconds 600` reporting 19 OK routes with only the activity-driven `forceOrder` routes optional-missing. A follow-up config-loader fix now makes non-editable `python -m pip install .` installs resolve `market-recorder validate-config`, repo-relative sources configs, and explicit repo-local config paths against the runtime repo root instead of the installed package location under `.venv`. The next operator-facing verification step should cover the shell installer, the service-owned control socket at `/run/market-recorder/<instance>/control.sock`, and the unprivileged CLI lifecycle flow as one workflow rather than treating systemctl as the primary surface.
+Notes: The live cycle finished with all enabled components reporting `running` throughout, all active segments sealed on graceful stop (`KillSignal=SIGTERM` semantics), and `report-data-quality --stale-after-seconds 600` reporting 19 OK routes with only the activity-driven `forceOrder` routes optional-missing. A follow-up config-loader fix now makes non-editable `python -m pip install .` installs resolve `market-recorder validate-config`, repo-relative sources configs, and explicit repo-local config paths against the runtime repo root instead of the installed package location under `.venv`. The current installed layout now centers the operator workflow on `/opt/CryptoTrader`, `/etc/CryptoTrader`, `/usr/local/bin/market-recorder`, and fresh installs only, with checkout-mode validation handled separately through `scripts/dev`.
 
-Refs: `2dda61c`; `e8c159b`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/config.py`; `tests/unit/test_config.py`; `src/market_recorder/service_control.py`; `tests/unit/test_service_control.py`
+Refs: `7b56d9f`; `2dda61c`; `e8c159b`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/config.py`; `tests/unit/test_config.py`; `src/market_recorder/service_control.py`; `tests/unit/test_service_control.py`
 
 ### Phase 8 — Stability run and normalization handoff
 

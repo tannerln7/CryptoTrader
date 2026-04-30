@@ -25,6 +25,7 @@ Use it to record implemented repo changes and meaningful documentation updates i
 
 ## 2026-04-30
 
+- `dd3224e`, `360aa23` — verified the install and service-control workflow end-to-end (fresh-install paths, `validate-config`, `write-sample`, sealed-file `validate-raw`, active-segment rejection, `systemd-analyze verify`, and a 3-minute bounded live `start`/`status`/`health`/`stop` cycle), forced `PYTHONUNBUFFERED=1` on the CLI-managed background worker subprocess so its stdout and stderr reach `data/service/recorder-service.log`, and documented runtime versus dev install, an uninstall and disable workflow, a recorder decommission procedure, and the actual content of the recorder-service log surface.
 - `cabbd6f` — updated AGENTS and the agent guidebook to require implementation commits first, non-changelog documentation commits second, and changelog updates last with no self-referential changelog-only entries.
 - `0c3d0e6` — refactored raw storage to keep the existing per-stream route layout while introducing writer-owned `.jsonl.zst.open` segments, atomic sealing to `.jsonl.zst`, route-resolved age and size rotation policies, sealed-file-first validation, and explicit handling for incomplete or stale active segments.
 - `45accd3` — refactored `market-recorder` into a service-first control surface and added a systemd template that supervises the foreground worker directly.

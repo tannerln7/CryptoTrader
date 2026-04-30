@@ -120,10 +120,16 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-Install dependencies:
+Install dependencies. For day-to-day operation, install the package only:
 
 ```bash
 python -m pip install --upgrade pip
+python -m pip install .
+```
+
+For development, install the package in editable mode with the test and lint extras (this is what `requirements.txt` resolves to):
+
+```bash
 python -m pip install -r requirements.txt
 ```
 
@@ -212,6 +218,31 @@ journalctl -u market-recorder@main.service -f
 ```
 
 The systemd unit runs the foreground `service-worker` path directly, so `market-recorder status` and `market-recorder health` still report recorder-level state for that repo checkout. Do not mix `market-recorder start` or `stop` with a systemd-managed instance; use `systemctl` for lifecycle and the CLI for app-level inspection.
+
+### Uninstall and disable
+
+For a CLI-managed background recorder, stop the worker and remove the repo-scoped control files:
+
+```bash
+market-recorder stop
+rm -rf data/service
+```
+
+The `data/service/` directory only holds the lock, state JSON, and capture log for the controller; raw output and health manifests live under the configured data root and are not removed by this step.
+
+For a systemd-managed instance, disable the unit and remove the installed assets:
+
+```bash
+sudo systemctl disable --now market-recorder@<instance>.service
+sudo rm /etc/systemd/system/market-recorder@.service
+sudo rm /etc/market-recorder/<instance>.env
+sudo rmdir /etc/market-recorder 2>/dev/null || true
+sudo systemctl daemon-reload
+```
+
+The systemd unit's `StateDirectory=market-recorder/<instance>` is not removed automatically. Delete `/var/lib/market-recorder/<instance>` only after confirming the captured raw data and health manifests are no longer needed.
+
+To uninstall the package itself, remove the virtual environment (`rm -rf .venv`) or run `python -m pip uninstall market-recorder` from the active environment.
 
 ### Runtime bootstrap and foreground dev/debug
 

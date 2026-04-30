@@ -66,3 +66,19 @@ Validation: Run `systemd-analyze verify ops/systemd/market-recorder@.service` be
 Notes: The template intentionally uses `Type=simple`, avoids `Type=forking`, and runs the hidden `service-worker` path directly so systemd supervises the real worker process instead of the CLI's detached controller. The unit uses `StateDirectory=market-recorder/%i`, which sets `$STATE_DIRECTORY` to `/var/lib/market-recorder/<instance>` for raw output and health manifests, while repo-scoped control files still live under `<repo>/data/service`. Because the current service-control layer is repo-scoped, one active recorder worker is supported per repo checkout. Use separate checkouts if multiple systemd instances must run concurrently.
 
 Refs: `45accd3`; `ops/systemd/market-recorder@.service`; `ops/systemd/market-recorder.env.example`; `docs/operations/monitoring.md`; `src/market_recorder/service_control.py`
+
+## Recorder decommission
+
+Status: implemented
+
+Purpose: Cleanly stop a running recorder and remove installed assets without orphaning a worker, a lock, or environment files that point at a no-longer-active deployment.
+
+Prerequisites: Operator access to the supervisor that currently owns the worker (the `market-recorder` CLI for repo-scoped background runs, or `systemctl` for a systemd-managed instance); access to remove the installed unit, env file, and any state directory the deployment previously used.
+
+Procedure: For a CLI-managed background recorder, run `market-recorder stop` and then remove the repo-scoped control directory with `rm -rf data/service`; the captured raw output and health manifests under the configured data root are not touched by this step. For a systemd-managed instance, run `sudo systemctl disable --now market-recorder@<instance>.service`, remove `/etc/systemd/system/market-recorder@.service`, remove `/etc/market-recorder/<instance>.env`, run `sudo systemctl daemon-reload`, and delete `/var/lib/market-recorder/<instance>` only after confirming the captured raw data and health manifests are no longer needed. To uninstall the package itself, remove the repo-local virtual environment or run `python -m pip uninstall market-recorder` from the active environment.
+
+Validation: After the CLI path, confirm `market-recorder status` reports `stopped`, the active worker PID is gone, no `.jsonl.zst.open` segments remain under the data root, and `data/service/` is absent. After the systemd path, confirm `systemctl status market-recorder@<instance>.service` reports the unit is no longer loaded, no `market-recorder` worker is running, and the env file and unit file are removed.
+
+Notes: Always stop the worker before removing its state or env files so the writer can finalize the active hour file by atomically sealing `.jsonl.zst.open` to `.jsonl.zst`. Removing files first risks leaving an unsealed active segment behind, which `validate-raw` and `report-data-quality` will treat as `incomplete-active` until manually finalized.
+
+Refs: `ops/systemd/market-recorder@.service`; `README.md`; `docs/operations/monitoring.md`; `src/market_recorder/service_control.py`

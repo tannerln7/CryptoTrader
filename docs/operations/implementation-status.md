@@ -147,9 +147,19 @@ Status: implemented
 
 Description: The `market-recorder` CLI now defaults to service status and manages a detached recorder worker with `start`, `stop`, `restart`, `status`, and `health` commands.
 
-Notes: Repo-scoped control files live under `data/service/` regardless of `--data-root` overrides, while runtime health manifests remain under the effective data root for the current run. The detached control surface wraps the same foreground worker path used by `run-service`, which remains available for development and debugging. The shipped systemd template also runs that foreground worker directly so `systemctl` can supervise the real process while CLI status and health remain usable.
+Notes: Repo-scoped control files live under `data/service/` regardless of `--data-root` overrides, while runtime health manifests remain under the effective data root for the current run. The detached control surface wraps the same foreground worker path used by `run-service`, which remains available for development and debugging. The shipped systemd template also runs that foreground worker directly so `systemctl` can supervise the real process while CLI status and health remain usable. The CLI background launcher now sets `PYTHONUNBUFFERED=1` on the worker subprocess so any stdout or stderr lines reach `data/service/recorder-service.log` immediately, mirroring the systemd unit's environment.
 
 Refs: `45accd3`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/cli.py`; `src/market_recorder/service_control.py`; `ops/systemd/market-recorder@.service`
+
+### Install and service verification
+
+Status: implemented
+
+Description: A focused install and service-control verification on 2026-04-30 covered fresh-machine install paths, `validate-config`, `write-sample`, `validate-raw` rejection of active `.jsonl.zst.open` segments, `systemd-analyze verify` of the shipped unit template, and a 3-minute bounded live `start`/`status`/`health`/`stop` cycle against a `/tmp` data root.
+
+Notes: The live cycle finished with all enabled components reporting `running` throughout, all active segments sealed on graceful stop (`KillSignal=SIGTERM` semantics), and `report-data-quality --stale-after-seconds 600` reporting 19 OK routes with only the activity-driven `forceOrder` routes optional-missing. The verification surfaced a parity gap with the systemd unit's environment, which is now closed by setting `PYTHONUNBUFFERED=1` on the CLI-launched background worker. Documentation updates added explicit runtime-only and dev install commands, an uninstall and disable workflow in the README, a decommission procedure in the deployment notes, and clarification of the recorder-service log surface in the monitoring notes.
+
+Refs: `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/service_control.py`; `tests/unit/test_service_control.py`
 
 ### Phase 8 — Stability run and normalization handoff
 

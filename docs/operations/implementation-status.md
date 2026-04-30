@@ -31,13 +31,13 @@ Refs: commit refs, relevant docs, or issue/decision links.
 
 ### Repository scaffold
 
-Status: in-progress
+Status: implemented
 
-Description: The repo is intentionally in a docs-first bootstrap state. Core implementation scaffolding such as `README.md`, `config/`, `src/`, `tests/`, and supporting project metadata has not yet been created.
+Description: The baseline scaffold now exists, including `README.md`, `pyproject.toml`, example config, a `src/market_recorder` package skeleton, a repo-local `.venv` interpreter convention, and unit smoke coverage.
 
-Notes: The next implementation step is Phase 0 scaffolding. Remove temporary bootstrap notes from the guidebook and raw-recorder plan once the baseline scaffold exists.
+Notes: Treat `pyproject.toml` as the source of truth for package metadata and tool configuration. Future work should extend the scaffold without changing canonical top-level layout unless the user explicitly re-scopes the repo.
 
-Refs: `pre-git`; `AGENTS.md`; `docs/agent-guidebook.md`; `docs/phases/raw-recorder/raw-recorder.md`
+Refs: `4a88c06`; `AGENTS.md`; `docs/phases/raw-recorder/phase0.md`
 
 ### Agent research policy
 
@@ -47,7 +47,7 @@ Description: The repo now requires Context7-first library and API research for c
 
 Notes: Agents should resolve the library ID first, prefer exact official and version-specific matches, and then query docs with a focused task-specific question. Later encounters in the same task may reuse in-context guidance until scope or version assumptions change.
 
-Refs: `pre-git`; `AGENTS.md`
+Refs: `4a88c06`; `AGENTS.md`
 
 ## Raw Recorder Program
 
@@ -59,39 +59,59 @@ Description: The program-level raw-recorder plan now has a detailed execution se
 
 Notes: The refined sequence separates runtime-contract scaffolding from storage implementation, splits Pyth capture from Aster market-stream capture, and isolates Aster depth/snapshot work because official depth-recovery rules require dedicated validation.
 
-Refs: `pre-git`; `docs/phases/raw-recorder/raw-recorder.md`; `docs/phases/raw-recorder/phase0.md`
+Refs: `4a88c06`; `docs/phases/raw-recorder/raw-recorder.md`; `docs/phases/raw-recorder/phase0.md`
 
-### R0 — Repository and documentation baseline
+### Phase 0 — Repository baseline and execution scaffold
 
-Status: in-progress
+Status: implemented
 
-Description: Canonical documentation paths, planning references, and operations tracking scaffolds now exist. The repo still needs its initial config, source, test, and package scaffolding.
+Description: The canonical repo scaffold, local interpreter convention, example config files, package placeholders, minimal CLI, and smoke-test baseline now exist.
 
-Notes: Future R0 work should preserve the canonical `docs/reference/`, `docs/operations/`, and `src/market_recorder/` structure.
+Notes: Phase 1 should build on these placeholders rather than relocating modules or reintroducing ambiguity around config, package layout, or interpreter selection.
 
-Refs: `pre-git`; `docs/phases/raw-recorder/raw-recorder.md`
+Refs: `4a88c06`; `docs/phases/raw-recorder/phase0.md`
 
-### R1 — Core raw recorder foundation
+### Phase 1 — Runtime contracts and recorder skeleton
 
 Status: planned
 
-Description: Source-agnostic recorder foundations such as config loading, timestamp utilities, path generation, raw writing, CLI entrypoints, and validation tooling are planned but not yet implemented.
+Description: Source-agnostic recorder foundations such as config loading, timestamp utilities, path generation, runtime contracts, and recorder orchestration are planned but not yet implemented.
 
 Notes: Keep this phase lightweight and reusable across providers.
 
-Refs: `pre-git`; `docs/phases/raw-recorder/raw-recorder.md`
+Refs: `4a88c06`; `docs/phases/raw-recorder/phase1.md`
 
-### R2 — Primary source capture
+### Phase 2 — Storage, rotation, and raw validation foundations
 
 Status: planned
 
-Description: Pyth Hermes and Aster live market streams are intended to be the first live raw capture targets once the shared recorder foundation exists.
+Description: Raw file writing, rotation, compression, manifest handling, and validation tooling are planned before live source capture begins.
 
-Notes: Source integrations should remain config-driven and independent at ingest.
+Notes: Preserve append-only raw storage semantics and keep validation representative and deterministic.
 
-Refs: `pre-git`; `docs/phases/raw-recorder/raw-recorder.md`; `docs/reference/providers/pyth.md`; `docs/reference/providers/aster.md`
+Refs: `4a88c06`; `docs/phases/raw-recorder/phase2.md`
 
-### R3 — Snapshot and L2 capture
+### Phase 3 — Pyth reference stream capture
+
+Status: planned
+
+Description: Pyth Hermes reference-price capture is planned as the first live raw stream integration.
+
+Notes: Preserve source payloads, provider timing metadata, and feed-level config without blending reference prices into exchange streams.
+
+Refs: `4a88c06`; `docs/phases/raw-recorder/phase3.md`; `docs/reference/providers/pyth.md`
+
+### Phase 4 — Aster market stream capture
+
+Status: planned
+
+Description: Aster trade, ticker, mark-price, liquidation, and baseline market stream capture is planned after the recorder core and storage layers exist.
+
+Notes: Source integrations should remain config-driven, connection-aware, and independent at ingest.
+
+Refs: `4a88c06`; `docs/phases/raw-recorder/phase4.md`; `docs/reference/providers/aster.md`
+
+### Phase 5 — Aster snapshots and depth capture
 
 Status: planned
 
@@ -99,29 +119,29 @@ Description: Aster REST depth snapshots and validated L2 stream capture are plan
 
 Notes: Preserve reconstruction-relevant update IDs and raw payloads without rebuilding books in the ingest path.
 
-Refs: `pre-git`; `docs/phases/raw-recorder/raw-recorder.md`; `docs/reference/providers/aster.md`
+Refs: `4a88c06`; `docs/phases/raw-recorder/phase5.md`; `docs/reference/providers/aster.md`
 
-### R4 — Alert and event capture
+### Phase 6 — TradingView alert and label capture
 
 Status: planned
 
 Description: TradingView or similar alert events are planned as raw label streams that can later be joined with market data.
 
-Notes: Keep alert payloads structured and preserve them as raw events.
+Notes: Keep alert payloads structured, authenticated where appropriate, and preserved as raw events.
 
-Refs: `pre-git`; `docs/phases/raw-recorder/raw-recorder.md`; `docs/reference/providers/tradingview.md`
+Refs: `4a88c06`; `docs/phases/raw-recorder/phase6.md`; `docs/reference/providers/tradingview.md`
 
-### R5 — Operational hardening
+### Phase 7 — Operational hardening and unattended runtime
 
 Status: planned
 
-Description: Service management, health visibility, and data-quality checks are planned after the raw capture path is functional.
+Description: Service management, health visibility, reconnect resilience, and data-quality checks are planned after the raw capture path is functional.
 
 Notes: Favor lightweight observability and clear operator signals before adding heavier infrastructure.
 
-Refs: `pre-git`; `docs/phases/raw-recorder/raw-recorder.md`
+Refs: `4a88c06`; `docs/phases/raw-recorder/phase7.md`
 
-### R6 — Raw recorder freeze and handoff
+### Phase 8 — Stability run and normalization handoff
 
 Status: planned
 
@@ -129,4 +149,4 @@ Description: A stabilization and handoff phase is planned before normalization w
 
 Notes: This phase should confirm source behavior, storage growth, validation results, and known limitations.
 
-Refs: `pre-git`; `docs/phases/raw-recorder/raw-recorder.md`
+Refs: `4a88c06`; `docs/phases/raw-recorder/phase8.md`

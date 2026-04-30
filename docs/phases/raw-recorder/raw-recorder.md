@@ -6,10 +6,6 @@ Use it as the brief orientation map for what the raw recorder is meant to do, wh
 
 It is intentionally concise. Detailed phase execution guidance lives in the individual phase files in this directory.
 
-> Temporary bootstrap note
-> The repository is intentionally in an early docs-first state while Phase 0 scaffolding is being established.
-> Remove this note once baseline scaffolding is complete.
-
 ---
 
 ## Purpose

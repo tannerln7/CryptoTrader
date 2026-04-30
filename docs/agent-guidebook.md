@@ -8,10 +8,6 @@ This guidebook and the other files under `docs/` are internal implementation, co
 
 For repo-wide agent rules, workflow, commit sequencing, documentation requirements, and safety constraints, see `AGENTS.md`.
 
-> Temporary bootstrap note
-> The repository is intentionally in a docs-first pre-scaffolding state. Missing baseline scaffold files and directories such as `README.md`, `config/`, `src/`, and `tests/` can be expected until Phase 0 scaffolding is completed.
-> Remove this note once the baseline repo scaffold exists.
-
 ---
 
 ## 1) Project Goal

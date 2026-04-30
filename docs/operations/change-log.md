@@ -23,5 +23,4 @@ Use it to record implemented repo changes and meaningful documentation updates i
 
 ## 2026-04-30
 
-- `pre-git` — added a repo-wide Context7-first research rule for code decisions and implementation, including resolve-first querying guidance for future agents.
-- `pre-git` — initialized the operations document scaffolds, normalized the `docs/reference/` path, aligned the internal docs with the repo's docs-first bootstrap state, split the raw-recorder program into detailed phase files, and refreshed the provider reference docs against current external documentation.
+- `4a88c06` — created the Phase 0 repository baseline, including the canonical docs set, Context7-first agent rules, provider references, project scaffold, example config, package skeleton, and baseline validation hooks.

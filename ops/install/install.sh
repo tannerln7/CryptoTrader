@@ -33,7 +33,9 @@ while [[ $# -gt 0 ]]; do
 Usage: sudo ./ops/install/install.sh [--instance NAME] [--enable] [--dry-run]
 
 Install the systemd service template, polkit rule, sysusers asset, and default
-instance environment file for the market recorder.
+    instance environment file for the market recorder.
+
+    --enable enables the unit for future boots. It does not start the service.
 EOF
       exit 0
       ;;
@@ -86,6 +88,9 @@ run_cmd systemctl daemon-reload
 systemctl_reload_polkit
 
 if [[ "${DRY_RUN}" != "1" ]]; then
+  if ! run_as_service_user market-recorder test -x "${REPO_ROOT}"; then
+    die "The market-recorder service user cannot access ${REPO_ROOT}. Move the repo to a service-readable location or grant ACL access, then rerun install."
+  fi
   if ! run_as_service_user market-recorder test -r "${CONFIG_PATH}"; then
     die "The market-recorder service user cannot read ${CONFIG_PATH}. Move the repo to a service-readable location or grant ACL access, then rerun install."
   fi
@@ -96,6 +101,7 @@ fi
 
 if [[ "${ENABLE}" == "1" ]]; then
   run_cmd systemctl enable "market-recorder@${INSTANCE}.service"
+  log_info "Enabled market-recorder@${INSTANCE}.service for future boots. It was not started."
 fi
 
 log_info "Installed market-recorder assets for instance ${INSTANCE}."
@@ -104,7 +110,8 @@ if [[ -n "${OPERATOR_USER}" && "${OPERATOR_USER}" != "root" ]]; then
   log_info "Added ${OPERATOR_USER} to the market-recorder group if needed. Refresh the group with 'newgrp market-recorder' or log out and back in."
 fi
 log_info "Next steps:"
-log_info "  market-recorder start"
-log_info "  market-recorder status"
-log_info "  market-recorder health"
-log_info "  market-recorder stop"
+log_info "  1. Create or edit the runtime config and update ${ENV_DEST}."
+log_info "  2. Verify service-user access to the repo root, Python, and runtime config."
+log_info "  3. Refresh group membership with 'newgrp market-recorder' or log out and back in."
+log_info "  4. Optionally rerun install.sh with --enable to enable boot-time startup."
+log_info "  5. Run market-recorder start, status, health, and stop as an unprivileged operator."

@@ -118,10 +118,10 @@ Current implemented foundation:
 * `src/market_recorder/sources/aster_depth.py` provides periodic REST depth snapshots plus partial-depth and diff-depth capture, including restart-required continuity checks when diff-depth `pu` no longer matches the prior `u`.
 * `src/market_recorder/alerts/tradingview.py` provides the TradingView webhook receiver and preserves both JSON and plain-text request bodies as raw alert events.
 * `src/market_recorder/service.py` provides the unattended recorder supervisor and runtime health-manifest writer.
-* `src/market_recorder/service_control.py` provides the repo-scoped background service controller, lock and state files, detached worker launch path, and health/status loading helpers.
+* `src/market_recorder/service_control.py` provides the systemd lifecycle helpers, service-owned control socket, readiness signaling, and health/status loading helpers.
 * `src/market_recorder/quality.py` provides the route-aware raw data quality report used by operators.
 * `src/market_recorder/cli.py` now defaults to service status and supports `start`, `stop`, `restart`, `status`, and `health`, while retaining `run-service`, runtime bootstrap, sample raw writing, raw-file validation, bounded live source capture, TradingView webhook serving, and raw-route quality reporting for development and debugging.
-* `ops/systemd/market-recorder@.service` ships a systemd template that supervises the foreground `service-worker` path directly so `systemctl` can own lifecycle while the CLI keeps health and state inspection.
+* `ops/install/` ships the dedicated shell installer and uninstall path, while `ops/systemd/market-recorder@.service` ships the installed unit that supervises the foreground `service-worker` path directly.
 * `config/sources.example.yaml` now documents the Aster depth snapshot cadence under `aster.depth`.
 
 Raw recording is the first data layer. Its job is intentionally narrow:
@@ -139,13 +139,14 @@ reconnect on failure
 
 Raw recording should not calculate indicators, normalize away source fields, blend prices, run backtests, make trade decisions, or place orders.
 
-The repo now has bounded Phase 8 handoff evidence, and the current live source paths plus operator surfaces have been proven with Pyth, Aster non-depth streams, Aster depth plus snapshot capture, local TradingView-compatible webhook delivery, repo-scoped background service control, systemd-compatible foreground supervision, and runtime health plus quality reporting. The remaining raw-recorder gap is longer soak evidence rather than missing architecture.
+The repo now has bounded Phase 8 handoff evidence, and the current live source paths plus operator surfaces have been proven with Pyth, Aster non-depth streams, Aster depth plus snapshot capture, local TradingView-compatible webhook delivery, a shell-installed systemd control path, service-owned runtime health plus status surfaces, and route-aware quality reporting. The remaining raw-recorder gap is longer soak evidence rather than missing architecture.
 
 Current raw-segment rules:
 
 * Keep the existing per-stream route layout: `raw/<source>/<transport>/<source_symbol>/<stream>/date=YYYY-MM-DD/hour=HH/...`.
 * Do not combine routes into a master raw file.
 * Writers own active `.jsonl.zst.open` segments.
+* Active `.jsonl.zst.open` segments stay service-private while open; sealed `.jsonl.zst` files may be group-readable but not group-writable.
 * Readers and validators treat sealed `.jsonl.zst` files as authoritative by default.
 * Rotation policy is resolved before writer construction from the route's source and logical stream name.
 * The parsed `manual_rotation` config is reserved for a future service-owned checkpoint flow and is not yet exposed as an operator command.

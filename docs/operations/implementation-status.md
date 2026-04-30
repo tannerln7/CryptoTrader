@@ -87,9 +87,9 @@ Status: implemented
 
 Description: The repo now has canonical per-stream raw-path generation, a streaming Zstandard JSONL writer with active/sealed segment lifecycle, route-resolved age and size rotation, and sealed-file validation utilities.
 
-Notes: Writers now own active `.jsonl.zst.open` files and atomically seal them into `.jsonl.zst` files on time or size rotation and on clean close. The route layout stays `raw/<source>/<transport>/<source_symbol>/<stream>/date=YYYY-MM-DD/hour=HH/...`; only the segment filename and lifecycle changed. `segment_start_utc` is the bucket start used for partitioning and active naming, `segment_end_utc` is the actual seal time used in sealed naming, and record-content timing remains available via `first_record_ts_recv_utc` and `last_record_ts_recv_utc` in writer seal metadata. The parsed `manual_rotation` config is reserved for a future service-owned checkpoint flow and is not yet exposed as an operator command.
+Notes: Writers now own active `.jsonl.zst.open` files and atomically seal them into `.jsonl.zst` files on time or size rotation and on clean close. Active segments are chmodded `0600` while open, and sealed segments are chmodded `0640` so operator-group read access never implies write access to raw data. The route layout stays `raw/<source>/<transport>/<source_symbol>/<stream>/date=YYYY-MM-DD/hour=HH/...`; only the segment filename, lifecycle, and final permission model changed. `segment_start_utc` is the bucket start used for partitioning and active naming, `segment_end_utc` is the actual seal time used in sealed naming, and record-content timing remains available via `first_record_ts_recv_utc` and `last_record_ts_recv_utc` in writer seal metadata. The parsed `manual_rotation` config is reserved for a future service-owned checkpoint flow and is not yet exposed as an operator command.
 
-Refs: `3bc71a4`; `0c3d0e6`; `docs/phases/raw-recorder/phase2.md`; `docs/reference/data-layout.md`; `config/config.example.yaml`; `src/market_recorder/storage/writer.py`; `src/market_recorder/storage/validate.py`
+Refs: `e8c159b`; `3bc71a4`; `0c3d0e6`; `docs/phases/raw-recorder/phase2.md`; `docs/reference/data-layout.md`; `config/config.example.yaml`; `src/market_recorder/storage/writer.py`; `src/market_recorder/storage/validate.py`
 
 ### Phase 3 — Pyth reference stream capture
 
@@ -145,11 +145,11 @@ Refs: `20b70dd`; `0c3d0e6`; `docs/phases/raw-recorder/phase7.md`; `docs/operatio
 
 Status: implemented
 
-Description: The `market-recorder` CLI now defaults to service status and manages a detached recorder worker with `start`, `stop`, `restart`, `status`, and `health` commands.
+Description: The `market-recorder` CLI now defaults to service status and controls an installed systemd unit through a service-owned Unix socket with `start`, `stop`, `restart`, `status`, and `health` commands.
 
-Notes: Repo-scoped control files live under `data/service/` regardless of `--data-root` overrides, while runtime health manifests remain under the effective data root for the current run. The detached control surface wraps the same foreground worker path used by `run-service`, which remains available for development and debugging. The shipped systemd template also runs that foreground worker directly so `systemctl` can supervise the real process while CLI status and health remain usable. The CLI background launcher now sets `PYTHONUNBUFFERED=1` on the worker subprocess so any stdout or stderr lines reach `data/service/recorder-service.log` immediately, mirroring the systemd unit's environment.
+Notes: The normal operator workflow is now `ops/install/install.sh` once, a group refresh once, then unprivileged `market-recorder start`, `status`, `health`, `restart`, and `stop` commands. The running service owns `/run/market-recorder/<instance>/control.sock`, answers only `ping`, `status`, `health`, and `stop`, and marks systemd readiness through direct `NOTIFY_SOCKET` writes only after the socket and health surface are ready. `run-service` remains the development and debugging foreground path.
 
-Refs: `45accd3`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/cli.py`; `src/market_recorder/service_control.py`; `ops/systemd/market-recorder@.service`
+Refs: `e8c159b`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/cli.py`; `src/market_recorder/service_control.py`; `ops/systemd/market-recorder@.service`
 
 ### Install and service verification
 
@@ -157,9 +157,9 @@ Status: implemented
 
 Description: A focused install and service-control verification on 2026-04-30 covered fresh-machine install paths, `validate-config`, `write-sample`, `validate-raw` rejection of active `.jsonl.zst.open` segments, `systemd-analyze verify` of the shipped unit template, and a 3-minute bounded live `start`/`status`/`health`/`stop` cycle against a `/tmp` data root.
 
-Notes: The live cycle finished with all enabled components reporting `running` throughout, all active segments sealed on graceful stop (`KillSignal=SIGTERM` semantics), and `report-data-quality --stale-after-seconds 600` reporting 19 OK routes with only the activity-driven `forceOrder` routes optional-missing. The verification surfaced a parity gap with the systemd unit's environment, which is now closed by setting `PYTHONUNBUFFERED=1` on the CLI-launched background worker. Documentation updates added explicit runtime-only and dev install commands, an uninstall and disable workflow in the README, a decommission procedure in the deployment notes, and clarification of the recorder-service log surface in the monitoring notes.
+Notes: The live cycle finished with all enabled components reporting `running` throughout, all active segments sealed on graceful stop (`KillSignal=SIGTERM` semantics), and `report-data-quality --stale-after-seconds 600` reporting 19 OK routes with only the activity-driven `forceOrder` routes optional-missing. The next operator-facing verification step should cover the shell installer, the service-owned control socket at `/run/market-recorder/<instance>/control.sock`, and the unprivileged CLI lifecycle flow as one workflow rather than treating systemctl as the primary surface.
 
-Refs: `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/service_control.py`; `tests/unit/test_service_control.py`
+Refs: `e8c159b`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `README.md`; `src/market_recorder/service_control.py`; `tests/unit/test_service_control.py`
 
 ### Phase 8 — Stability run and normalization handoff
 

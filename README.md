@@ -8,7 +8,7 @@ The current system focuses on collecting raw market and alert data in a reproduc
 
 - Captures live market data from Pyth and Aster.
 - Captures TradingView webhook alerts as raw events.
-- Controls a repo-scoped background recorder service with start, stop, restart, status, and health commands.
+- Installs and controls a systemd-managed recorder service through an unprivileged CLI and a service-owned Unix control socket.
 - Stores append-only compressed raw records in a canonical filesystem layout.
 - Writes runtime health manifests for unattended recorder runs.
 - Validates raw files and reports missing, stale, or invalid data routes.
@@ -24,7 +24,7 @@ Implemented provider-facing components:
 - Aster non-depth WebSocket market capture.
 - Aster depth WebSocket capture plus periodic REST order-book snapshots.
 - TradingView-compatible webhook ingestion for alert events.
-- A repo-scoped background recorder service control surface with lock, state, log, and health-manifest output.
+- A systemd-managed recorder service with a service-owned control socket, runtime health manifests, and route-aware quality checks.
 - Route-aware raw data quality reporting.
 
 The raw layer is intentionally narrow. It connects to sources, timestamps and wraps events, writes compressed records, rotates files, and surfaces service plus runtime health. It does not normalize source payloads, generate features, backtest strategies, or place trades.
@@ -46,12 +46,12 @@ Today, the implemented path is the raw/source capture layer.
 At runtime, the system:
 
 1. Loads typed runtime and provider configuration from YAML.
-2. Uses the `market-recorder` CLI as the operator control surface for background service lifecycle or one-shot dev/debug commands.
+2. Uses the `market-recorder` CLI as the operator control surface for installed service lifecycle or one-shot dev/debug commands.
 3. Starts a shared aiohttp runtime for HTTP, SSE, and WebSocket workloads.
 4. Connects to enabled sources or binds the TradingView webhook receiver.
 5. Wraps incoming payloads in canonical raw envelopes with timestamps and run metadata.
 6. Writes `.jsonl.zst` files using hourly rotation under the configured data root.
-7. Persists repo-scoped service state under `data/service/`, emits runtime health manifests under the effective data root, and supports post-run quality validation.
+7. Exposes `/run/market-recorder/<instance>/control.sock`, emits runtime health manifests under the effective data root, and supports post-run quality validation.
 
 ## Storage Model
 
@@ -74,12 +74,10 @@ Runtime health manifests are written under:
 data/manifests/runtime/health-<run_id>.json
 ```
 
-Service-control files are written under:
+The installed service exposes a control socket under:
 
 ```text
-data/service/recorder-service.json
-data/service/recorder-service.lock
-data/service/recorder-service.log
+/run/market-recorder/<instance>/control.sock
 ```
 
 The raw envelope and storage contracts are documented in:
@@ -106,10 +104,10 @@ Key package areas:
 - `src/market_recorder/sources/` for provider adapters.
 - `src/market_recorder/alerts/` for alert ingestion.
 - `src/market_recorder/service.py` for unattended service orchestration.
-- `src/market_recorder/service_control.py` for repo-scoped service state, locking, and foreground worker control.
+- `src/market_recorder/service_control.py` for systemd lifecycle helpers, service-owned control socket handling, and foreground worker control.
 - `src/market_recorder/quality.py` for route-level health and quality checks.
 - `src/market_recorder/cli.py` for the `market-recorder` command.
-- `ops/systemd/` for the systemd service template and instance env example.
+- `ops/install/` and `ops/systemd/` for the shell installer, uninstall path, systemd unit, and instance env example.
 
 ## Getting Started
 
@@ -161,7 +159,21 @@ Keep secrets and private endpoints out of committed config.
 
 ## Common Workflows
 
-### Background service control
+### Installed service workflow
+
+Install the service assets once:
+
+```bash
+sudo ./ops/install/install.sh --instance main --enable
+```
+
+Refresh your group membership so the unprivileged CLI can use the control socket and polkit rule:
+
+```bash
+newgrp market-recorder
+```
+
+Or log out and back in.
 
 Show the current recorder-service state:
 
@@ -189,64 +201,47 @@ market-recorder restart
 market-recorder stop
 ```
 
-### Systemd deployment
+The service lifecycle commands above are the normal operator workflow. They do not accept runtime config overrides; edit `/etc/market-recorder/<instance>.env` instead.
 
-The repo ships a systemd template and env-file example under `ops/systemd/`:
+### Advanced troubleshooting
+
+The repo still ships the underlying systemd and polkit assets under `ops/systemd/`, `ops/polkit/`, `ops/sysusers/`, and `ops/install/`.
+
+For troubleshooting only, inspect the unit and journal directly:
+
+```bash
+systemctl status market-recorder@main.service
+journalctl -u market-recorder@main.service -f
+```
+
+If you need to validate or inspect the installed unit definition itself:
 
 ```text
 ops/systemd/market-recorder@.service
 ops/systemd/market-recorder.env.example
+ops/polkit/49-market-recorder.rules
+ops/sysusers/market-recorder.conf
 ```
 
-For a systemd-managed instance, copy the env example to `/etc/market-recorder/<instance>.env`, install or link the unit, then enable the instance:
+Validate the shipped unit locally with:
 
 ```bash
-sudo mkdir -p /etc/market-recorder
-sudo cp ops/systemd/market-recorder.env.example /etc/market-recorder/main.env
-sudo cp ops/systemd/market-recorder@.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now market-recorder@main.service
+systemd-analyze verify ops/systemd/market-recorder@.service
 ```
-
-Use systemd for lifecycle operations when the unit owns the worker:
-
-```bash
-sudo systemctl status market-recorder@main.service
-sudo systemctl restart market-recorder@main.service
-sudo systemctl stop market-recorder@main.service
-journalctl -u market-recorder@main.service -f
-```
-
-The systemd unit runs the foreground `service-worker` path directly, so `market-recorder status` and `market-recorder health` still report recorder-level state for that repo checkout. Do not mix `market-recorder start` or `stop` with a systemd-managed instance; use `systemctl` for lifecycle and the CLI for app-level inspection.
 
 ### Uninstall and disable
 
-For a CLI-managed background recorder, stop the worker and remove the repo-scoped control files:
+Remove an installed instance with the dedicated shell script:
 
 ```bash
-market-recorder stop
-rm -rf data/service
+sudo ./ops/install/uninstall.sh --instance main
 ```
 
-The `data/service/` directory only holds the lock, state JSON, and capture log for the controller; raw output and health manifests live under the configured data root and are not removed by this step.
+Add `--purge` only when you also want to remove `/var/lib/market-recorder/<instance>`.
 
-For a systemd-managed instance, disable the unit and remove the installed assets:
-
-```bash
-sudo systemctl disable --now market-recorder@<instance>.service
-sudo rm /etc/systemd/system/market-recorder@.service
-sudo rm /etc/market-recorder/<instance>.env
-sudo rmdir /etc/market-recorder 2>/dev/null || true
-sudo systemctl daemon-reload
-```
-
-The systemd unit's `StateDirectory=market-recorder/<instance>` is not removed automatically. Delete `/var/lib/market-recorder/<instance>` only after confirming the captured raw data and health manifests are no longer needed.
-
-To uninstall the package itself, remove the virtual environment (`rm -rf .venv`) or run `python -m pip uninstall market-recorder` from the active environment.
+The uninstall script disables the instance, removes its env file, and removes the shared service or polkit assets only when no installed instance env files remain.
 
 ### Runtime bootstrap and foreground dev/debug
-
-Start the recorder runtime and exit after startup checks:
 
 ```bash
 market-recorder run
@@ -305,7 +300,7 @@ Run the recorder worker in the foreground for local debugging or bounded smoke r
 market-recorder run-service --duration-seconds 20 --health-interval-seconds 2
 ```
 
-The public `start` command wraps the same worker path, but runs it in the background and records repo-scoped service state.
+The public `start` command now targets the installed systemd instance. `run-service` remains the foreground development and debugging path.
 
 Run a route-aware quality report after capture:
 
@@ -354,4 +349,4 @@ Start here depending on what you need:
 
 ## Status
 
-The raw recorder is operational for bounded live capture, service-first background operation, and direct systemd supervision through the shipped unit template. The current control surface supports `start`, `stop`, `restart`, `status`, and `health`, while keeping `run-service` and the source-specific commands available for development and debugging. The next major layer is downstream normalization built on the existing raw contracts, storage layout, and provider-specific capture paths.
+The raw recorder is operational for bounded live capture, a shell-installed systemd deployment path, and an unprivileged service-control surface through `start`, `stop`, `restart`, `status`, and `health`. `run-service` and the source-specific commands remain available for development and debugging. The next major layer is downstream normalization built on the existing raw contracts, storage layout, and provider-specific capture paths.

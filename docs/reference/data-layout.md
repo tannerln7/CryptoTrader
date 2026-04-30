@@ -117,6 +117,7 @@ Rules:
 * One JSON object per line.
 * Zstandard compression.
 * Writers own active `.jsonl.zst.open` segments and never write directly to final-looking sealed files.
+* Active `.jsonl.zst.open` segments remain service-private while open; sealed `.jsonl.zst` files may be group-readable but are not group-writable.
 * Sealing closes the zstd frame and atomically renames the active path to a sealed `.jsonl.zst` path.
 * Validators and user-facing inspection commands should treat sealed `.jsonl.zst` files as authoritative by default.
 * Append-only.

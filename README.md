@@ -212,6 +212,8 @@ sudo -u market-recorder test -x "${REPO_ROOT}/.venv/bin/python" && echo "python 
 sudo -u market-recorder test -r "${REPO_ROOT}/data/systemd/main/config.yaml" && echo "config ok" || echo "config fail"
 ```
 
+`install.sh` now runs the same service-user checks internally and exits if they fail. The explicit commands above are still useful because they show which path is blocked.
+
 If the repo access check fails, verify execute and traverse permissions on every parent directory in the repo path, not just on the repo directory itself.
 
 Refresh your group membership so the unprivileged CLI can use the control socket and polkit rule:

@@ -25,6 +25,7 @@ Use it to record implemented repo changes and meaningful documentation updates i
 
 ## 2026-04-30
 
+- `15a9801`, `dba611f` — fixed the installed `/usr/local/bin/market-recorder` launcher to invoke the final-path venv Python module entrypoint so staged app-root moves do not leave a broken console-script shebang behind.
 - `7b56d9f`, `f07ecf2` — adopted the production-first installed layout under `/opt/CryptoTrader` and `/etc/CryptoTrader`, added explicit checkout-mode `scripts/dev` wrappers, and updated the operator and developer workflow docs to match.
 - `2faba3a`, `74b4ac6` — fixed the installer helper so service-user repo, Python, and config access checks stop the install on failure instead of masking `runuser` or `su` errors, and documented that `install.sh` now enforces the same checks shown in the manual verification steps.
 - `0aa0fe8` — replaced the silent service-user access-check examples in the README and deployment guide with explicit `ok` and `fail` command forms so install verification is readable at the terminal.

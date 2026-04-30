@@ -15,7 +15,7 @@ from pathlib import Path
 from time import monotonic, sleep
 from typing import Any
 
-from .config import RecorderConfig
+from .config import RecorderConfig, default_instance_name
 from .control_socket import ControlSocketServer, SocketUnavailableError, request_control
 from .logging import configure_logging
 from .runtime import RecorderRuntime
@@ -25,7 +25,6 @@ from .timeutil import utc_now_iso
 
 _RUNNING_STATES = frozenset({"starting", "running", "stopping"})
 _ACTIVE_SYSTEMD_STATES = frozenset({"active", "activating", "deactivating"})
-_DEFAULT_INSTANCE = "main"
 _DEFAULT_OPERATOR_GROUP = "market-recorder"
 
 
@@ -37,7 +36,7 @@ class ServiceControlError(RuntimeError):
 class RecorderServiceLaunchSpec:
     config_path: Path
     sources_path: Path
-    repo_root: Path
+    app_root: Path
     data_root: Path
     log_level: str
     structured_logging: bool
@@ -117,7 +116,7 @@ class _WorkerControlState:
 
 
 def default_instance() -> str:
-    return os.environ.get("MARKET_RECORDER_INSTANCE", _DEFAULT_INSTANCE)
+    return os.environ.get("MARKET_RECORDER_INSTANCE") or default_instance_name()
 
 
 def default_socket_path(instance: str) -> Path:
@@ -138,7 +137,7 @@ def build_service_launch_spec(
     return RecorderServiceLaunchSpec(
         config_path=config.config_path,
         sources_path=config.sources_path,
-        repo_root=config.repo_root,
+        app_root=config.repo_root,
         data_root=config.runtime.data_root,
         log_level=config.logging.level,
         structured_logging=config.logging.structured,

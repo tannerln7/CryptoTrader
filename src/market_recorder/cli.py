@@ -14,6 +14,7 @@ from .alerts import TradingViewWebhookSummary, serve_tradingview_webhook
 from .config import (
     ConfigError,
     apply_runtime_overrides,
+    installed_env_path,
     load_config,
 )
 from .contracts import build_market_event
@@ -281,7 +282,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _restart_command(args.instance)
 
     try:
-        config = load_config(args.config, sources_path=args.sources)
+        config = load_config(args.config, sources_path=args.sources, instance=args.instance)
         config = apply_runtime_overrides(
             config,
             data_root=args.data_root,
@@ -774,7 +775,7 @@ def _service_control_override_error(command: str, args: argparse.Namespace) -> s
         return None
     return (
         "Service control commands do not accept runtime config overrides. "
-        f"Edit /etc/market-recorder/{args.instance}.env or use a development/debug command instead."
+        f"Edit {installed_env_path(args.instance)} or use a development/debug command instead."
     )
 
 

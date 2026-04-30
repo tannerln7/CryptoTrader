@@ -4,7 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from market_recorder.config import apply_runtime_overrides, load_config
+from market_recorder.config import CHECKOUT_LAYOUT, apply_runtime_overrides, load_config
 from market_recorder.control_socket import request_control
 from market_recorder.service_control import (
     build_service_launch_spec,
@@ -74,7 +74,13 @@ validation:
     assert config.runtime.data_root != overridden.runtime.data_root
 
 
-def test_default_socket_path_uses_instance() -> None:
+def test_default_socket_path_uses_instance(monkeypatch) -> None:
+    monkeypatch.delenv("MARKET_RECORDER_INSTANCE", raising=False)
+    monkeypatch.delenv("MARKET_RECORDER_LAYOUT", raising=False)
+
+    assert default_instance() == "production"
+
+    monkeypatch.setenv("MARKET_RECORDER_LAYOUT", CHECKOUT_LAYOUT)
     assert default_instance() == "main"
     assert default_socket_path("copilot") == Path("/run/market-recorder/copilot/control.sock")
 

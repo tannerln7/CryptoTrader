@@ -10,14 +10,21 @@ from typing import Any
 
 import yaml
 
-REPO_ROOT = Path.cwd().resolve()
+INSTALLED_LAYOUT = "installed"
+CHECKOUT_LAYOUT = "checkout"
+
 CONFIG_DIR = Path("config")
 DEFAULT_CONFIG_PATH = CONFIG_DIR / "config.example.yaml"
 DEFAULT_SOURCES_PATH = CONFIG_DIR / "sources.example.yaml"
+DEFAULT_INSTALLED_APP_ROOT = Path("/opt/CryptoTrader")
+DEFAULT_INSTALLED_CONFIG_ROOT = Path("/etc/CryptoTrader")
+DEFAULT_INSTALLED_INSTANCE = "production"
+DEFAULT_CHECKOUT_INSTANCE = "main"
 
 _VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 _SUPPORTED_STORAGE_FORMATS = frozenset({"jsonl.zst"})
 _SUPPORTED_LEGACY_ROTATIONS = frozenset({"hourly"})
+_SUPPORTED_LAYOUTS = frozenset({INSTALLED_LAYOUT, CHECKOUT_LAYOUT})
 
 
 class ConfigError(ValueError):
@@ -455,16 +462,87 @@ class RecorderConfig:
 		return tuple(names)
 
 
+def resolve_layout_mode(layout: str | None = None, *, repo_root: Path | None = None) -> str:
+	candidate = layout if layout is not None else os.environ.get("MARKET_RECORDER_LAYOUT")
+	if candidate is None or not candidate.strip():
+		return CHECKOUT_LAYOUT if repo_root is not None else INSTALLED_LAYOUT
+
+	normalized = candidate.strip().lower()
+	if normalized not in _SUPPORTED_LAYOUTS:
+		raise ConfigError(
+			f"MARKET_RECORDER_LAYOUT must be one of {sorted(_SUPPORTED_LAYOUTS)}, got {candidate!r}",
+		)
+	return normalized
+
+
+def default_instance_name(*, layout: str | None = None, repo_root: Path | None = None) -> str:
+	resolved_layout = resolve_layout_mode(layout, repo_root=repo_root)
+	if resolved_layout == CHECKOUT_LAYOUT:
+		return DEFAULT_CHECKOUT_INSTANCE
+	return DEFAULT_INSTALLED_INSTANCE
+
+
+def default_config_path(
+	*,
+	layout: str | None = None,
+	instance: str | None = None,
+	repo_root: Path | None = None,
+) -> Path:
+	resolved_layout = resolve_layout_mode(layout, repo_root=repo_root)
+	if resolved_layout == INSTALLED_LAYOUT:
+		resolved_instance = instance or os.environ.get("MARKET_RECORDER_INSTANCE") or default_instance_name(
+			layout=resolved_layout,
+			repo_root=repo_root,
+		)
+		return (DEFAULT_INSTALLED_CONFIG_ROOT / f"{resolved_instance}.yaml").resolve()
+	return DEFAULT_CONFIG_PATH
+
+
+def default_sources_path(
+	*,
+	layout: str | None = None,
+	instance: str | None = None,
+	repo_root: Path | None = None,
+) -> Path:
+	resolved_layout = resolve_layout_mode(layout, repo_root=repo_root)
+	if resolved_layout == INSTALLED_LAYOUT:
+		resolved_instance = instance or os.environ.get("MARKET_RECORDER_INSTANCE") or default_instance_name(
+			layout=resolved_layout,
+			repo_root=repo_root,
+		)
+		return (DEFAULT_INSTALLED_CONFIG_ROOT / f"{resolved_instance}.sources.yaml").resolve()
+	return DEFAULT_SOURCES_PATH
+
+
+def installed_env_path(instance: str | None = None) -> Path:
+	resolved_instance = instance or os.environ.get("MARKET_RECORDER_INSTANCE") or DEFAULT_INSTALLED_INSTANCE
+	return (DEFAULT_INSTALLED_CONFIG_ROOT / f"{resolved_instance}.env").resolve()
+
+
 def load_config(
 	config_path: str | Path | None = None,
 	*,
 	sources_path: str | Path | None = None,
 	repo_root: Path | None = None,
+	instance: str | None = None,
+	layout: str | None = None,
 ) -> RecorderConfig:
 	"""Load and validate the runtime and source configuration files."""
 
-	resolved_repo_root = _resolve_repo_root(repo_root, config_path)
-	resolved_config_path = _resolve_repo_path(config_path or DEFAULT_CONFIG_PATH, resolved_repo_root)
+	resolved_layout = resolve_layout_mode(layout, repo_root=repo_root)
+	resolved_instance = instance or os.environ.get("MARKET_RECORDER_INSTANCE") or default_instance_name(
+		layout=resolved_layout,
+		repo_root=repo_root,
+	)
+	resolved_repo_root = _resolve_repo_root(repo_root, config_path, layout=resolved_layout)
+	resolved_config_path = _resolve_repo_path(
+		config_path or default_config_path(
+			layout=resolved_layout,
+			instance=resolved_instance,
+			repo_root=repo_root,
+		),
+		resolved_repo_root,
+	)
 	config_mapping = _load_yaml_mapping(resolved_config_path, "runtime config")
 
 	runtime = RuntimeConfig.from_mapping(
@@ -538,9 +616,15 @@ def _load_yaml_mapping(path: Path, label: str) -> dict[str, Any]:
 	return dict(loaded)
 
 
-def _resolve_repo_root(repo_root: Path | None, config_path: str | Path | None) -> Path:
+def _resolve_repo_root(repo_root: Path | None, config_path: str | Path | None, *, layout: str) -> Path:
 	if repo_root is not None:
 		return Path(repo_root).resolve()
+
+	if layout == INSTALLED_LAYOUT:
+		env_app_root = os.environ.get("MARKET_RECORDER_APP_ROOT")
+		if env_app_root:
+			return Path(env_app_root).resolve()
+		return DEFAULT_INSTALLED_APP_ROOT.resolve()
 
 	env_repo_root = os.environ.get("MARKET_RECORDER_REPO_ROOT")
 	if env_repo_root:

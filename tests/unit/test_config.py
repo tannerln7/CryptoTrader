@@ -5,14 +5,20 @@ from pathlib import Path
 import pytest
 
 from market_recorder.config import (
+  CHECKOUT_LAYOUT,
   DEFAULT_CONFIG_PATH,
+  DEFAULT_INSTALLED_CONFIG_ROOT,
+  DEFAULT_INSTALLED_INSTANCE,
   DEFAULT_SOURCES_PATH,
   ConfigError,
+  default_config_path,
+  default_instance_name,
   load_config,
 )
 
 
-def test_load_config_reads_example_files() -> None:
+def test_load_config_reads_example_files(monkeypatch) -> None:
+    monkeypatch.setenv("MARKET_RECORDER_LAYOUT", CHECKOUT_LAYOUT)
     config = load_config()
 
     assert config.config_path == (config.repo_root / DEFAULT_CONFIG_PATH).resolve()
@@ -26,6 +32,7 @@ def test_load_config_reads_example_files() -> None:
 
 
 def test_load_config_infers_repo_root_from_absolute_config_path(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("MARKET_RECORDER_LAYOUT", CHECKOUT_LAYOUT)
     (tmp_path / "pyproject.toml").write_text("[build-system]\nrequires = []\n", encoding="utf-8")
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -84,6 +91,14 @@ validation:
     assert config.repo_root == tmp_path.resolve()
     assert config.config_path == config_path.resolve()
     assert config.sources_path == sources_path.resolve()
+
+
+def test_default_config_path_uses_installed_production_instance(monkeypatch) -> None:
+    monkeypatch.delenv("MARKET_RECORDER_LAYOUT", raising=False)
+    monkeypatch.delenv("MARKET_RECORDER_INSTANCE", raising=False)
+
+    assert default_instance_name() == DEFAULT_INSTALLED_INSTANCE
+    assert default_config_path() == (DEFAULT_INSTALLED_CONFIG_ROOT / "production.yaml").resolve()
 
 
 def test_load_config_defaults_aster_depth_settings_when_missing(tmp_path: Path) -> None:

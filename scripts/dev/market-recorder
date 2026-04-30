@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd -- "${SCRIPT_DIR}/../.." && pwd)
+VENV_PYTHON="${REPO_ROOT}/.venv/bin/python"
+
+[[ -x "${VENV_PYTHON}" ]] || {
+  echo "Missing repo-local Python at ${VENV_PYTHON}. Create the development virtualenv first." >&2
+  exit 1
+}
+
+# shellcheck source=./env.sh
+. "${SCRIPT_DIR}/env.sh"
+
+exec "${VENV_PYTHON}" -m market_recorder.cli "$@"

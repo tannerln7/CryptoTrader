@@ -9,7 +9,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 ensure_root
 
-INSTANCE=main
+INSTANCE=production
 PURGE=0
 DRY_RUN=0
 
@@ -31,8 +31,8 @@ while [[ $# -gt 0 ]]; do
       cat <<'EOF'
 Usage: sudo ./ops/install/uninstall.sh [--instance NAME] [--purge] [--dry-run]
 
-Disable and remove the installed market recorder instance environment file and,
-when no instances remain, remove the shared service and polkit assets.
+Disable and remove the installed market recorder instance configuration and,
+when no instances remain, remove the shared /opt, wrapper, systemd, and polkit assets.
 EOF
       exit 0
       ;;
@@ -42,7 +42,12 @@ EOF
   esac
 done
 
-ENV_DEST="/etc/market-recorder/${INSTANCE}.env"
+CONFIG_ROOT=/etc/CryptoTrader
+APP_ROOT=/opt/CryptoTrader
+WRAPPER_DEST=/usr/local/bin/market-recorder
+ENV_DEST="${CONFIG_ROOT}/${INSTANCE}.env"
+CONFIG_DEST="${CONFIG_ROOT}/${INSTANCE}.yaml"
+SOURCES_DEST="${CONFIG_ROOT}/${INSTANCE}.sources.yaml"
 UNIT_DEST="/etc/systemd/system/market-recorder@.service"
 SYSUSERS_DEST="/etc/sysusers.d/market-recorder.conf"
 POLKIT_DEST="/etc/polkit-1/rules.d/49-market-recorder.rules"
@@ -55,18 +60,32 @@ fi
 if [[ -f "${ENV_DEST}" ]]; then
   run_cmd rm -f "${ENV_DEST}"
 fi
+if [[ -f "${CONFIG_DEST}" ]]; then
+  run_cmd rm -f "${CONFIG_DEST}"
+fi
+if [[ -f "${SOURCES_DEST}" ]]; then
+  run_cmd rm -f "${SOURCES_DEST}"
+fi
 
 remaining_env_count=0
-if [[ -d /etc/market-recorder ]]; then
-  remaining_env_count=$(find /etc/market-recorder -maxdepth 1 -type f -name '*.env' | wc -l | tr -d ' ')
+if [[ -d "${CONFIG_ROOT}" ]]; then
+  remaining_env_count=$(find "${CONFIG_ROOT}" -maxdepth 1 -type f -name '*.env' | wc -l | tr -d ' ')
 fi
 
 if [[ "${remaining_env_count}" == "0" ]]; then
+  [[ ! -f "${WRAPPER_DEST}" ]] || run_cmd rm -f "${WRAPPER_DEST}"
+  [[ ! -d "${APP_ROOT}" ]] || run_cmd rm -rf "${APP_ROOT}"
   [[ ! -f "${UNIT_DEST}" ]] || run_cmd rm -f "${UNIT_DEST}"
   [[ ! -f "${SYSUSERS_DEST}" ]] || run_cmd rm -f "${SYSUSERS_DEST}"
   [[ ! -f "${POLKIT_DEST}" ]] || run_cmd rm -f "${POLKIT_DEST}"
   run_cmd systemctl daemon-reload
   systemctl_reload_polkit
+fi
+
+if [[ -d "${CONFIG_ROOT}" && "${remaining_env_count}" == "0" ]]; then
+  if [[ "$(find "${CONFIG_ROOT}" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" == "0" ]]; then
+    run_cmd rmdir "${CONFIG_ROOT}"
+  fi
 fi
 
 if [[ "${PURGE}" == "1" ]]; then

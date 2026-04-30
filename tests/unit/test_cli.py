@@ -4,6 +4,7 @@ from pathlib import Path
 
 from market_recorder.alerts import TradingViewWebhookSummary
 from market_recorder.cli import build_parser, main
+from market_recorder.config import CHECKOUT_LAYOUT
 from market_recorder.contracts import build_market_event
 from market_recorder.service_control import (
     RecorderServiceStatus,
@@ -46,7 +47,8 @@ def _service_status(
     )
 
 
-def test_cli_validate_config_reports_loaded_paths(capsys) -> None:
+def test_cli_validate_config_reports_loaded_paths(capsys, monkeypatch) -> None:
+    monkeypatch.setenv("MARKET_RECORDER_LAYOUT", CHECKOUT_LAYOUT)
     exit_code = main(["validate-config"])
     captured = capsys.readouterr()
 
@@ -338,7 +340,7 @@ def test_cli_restart_reports_restarted_service(capsys, monkeypatch) -> None:
         state="running",
         pid=9876,
         run_id="recorder-test",
-        config_path=Path("/etc/market-recorder/main.env"),
+      config_path=Path("/etc/CryptoTrader/main.yaml"),
         data_root=Path("/var/lib/market-recorder/main"),
         health_path=Path("/var/lib/market-recorder/main/manifests/runtime/health.json"),
         started_at_utc="2026-04-30T00:00:00Z",

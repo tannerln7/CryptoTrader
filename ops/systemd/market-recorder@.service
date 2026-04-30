@@ -6,7 +6,8 @@ Wants=network-online.target
 [Service]
 Type=notify
 NotifyAccess=main
-EnvironmentFile=/etc/market-recorder/%i.env
+WorkingDirectory=/opt/CryptoTrader
+EnvironmentFile=/etc/CryptoTrader/%i.env
 Environment=PYTHONUNBUFFERED=1
 Environment=MARKET_RECORDER_LOG_LEVEL=INFO
 Environment=MARKET_RECORDER_HEALTH_INTERVAL_SECONDS=10
@@ -24,10 +25,10 @@ SyslogIdentifier=market-recorder@%i
 User=market-recorder
 Group=market-recorder
 
-ExecStartPre=/usr/bin/test -d ${MARKET_RECORDER_REPO_ROOT}
-ExecStartPre=/usr/bin/test -x ${MARKET_RECORDER_PYTHON}
+ExecStartPre=/usr/bin/test -d /opt/CryptoTrader
+ExecStartPre=/usr/bin/test -x /usr/local/bin/market-recorder
 ExecStartPre=/usr/bin/test -f ${MARKET_RECORDER_CONFIG}
-ExecStart=/usr/bin/env -C ${MARKET_RECORDER_REPO_ROOT} ${MARKET_RECORDER_PYTHON} -m market_recorder.cli --config ${MARKET_RECORDER_CONFIG} --data-root ${STATE_DIRECTORY} --log-level ${MARKET_RECORDER_LOG_LEVEL} service-worker --health-interval-seconds ${MARKET_RECORDER_HEALTH_INTERVAL_SECONDS}
+ExecStart=/usr/local/bin/market-recorder --instance %i --config ${MARKET_RECORDER_CONFIG} --data-root ${STATE_DIRECTORY} --log-level ${MARKET_RECORDER_LOG_LEVEL} service-worker --health-interval-seconds ${MARKET_RECORDER_HEALTH_INTERVAL_SECONDS}
 
 Restart=on-failure
 RestartPreventExitStatus=2

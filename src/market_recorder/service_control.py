@@ -216,6 +216,19 @@ def build_service_worker_command(
     return command
 
 
+def build_service_worker_env(base_env: dict[str, str] | None = None) -> dict[str, str]:
+    """Return the environment used when launching the background worker subprocess.
+
+    Inherits the caller's environment by default and forces ``PYTHONUNBUFFERED=1`` so
+    the worker's stdlib logging output is flushed line-by-line into the captured
+    service log file instead of being lost when the worker receives SIGTERM.
+    """
+
+    env = dict(os.environ if base_env is None else base_env)
+    env.setdefault("PYTHONUNBUFFERED", "1")
+    return env
+
+
 def read_service_state(state_path: Path) -> RecorderServiceState | None:
     if not state_path.exists():
         return None
@@ -318,6 +331,7 @@ def start_background_service(
     paths = default_service_paths(launch_spec.repo_root)
     paths.log_path.parent.mkdir(parents=True, exist_ok=True)
     log_handle = paths.log_path.open("a", encoding="utf-8")
+    worker_env = build_service_worker_env()
     try:
         process = subprocess.Popen(
             build_service_worker_command(launch_spec, python_executable=python_executable),
@@ -328,6 +342,7 @@ def start_background_service(
             close_fds=True,
             start_new_session=True,
             text=True,
+            env=worker_env,
         )
     finally:
         log_handle.close()

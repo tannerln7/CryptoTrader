@@ -8,6 +8,7 @@ from market_recorder.service_control import (
     RecorderServiceState,
     build_service_launch_spec,
     build_service_worker_command,
+    build_service_worker_env,
     default_service_paths,
     read_service_state,
     read_service_status,
@@ -168,6 +169,15 @@ validation:
     assert "service-worker" in command
     assert "--duration-seconds" in command
     assert "--data-root" in command
+
+
+def test_build_service_worker_env_forces_unbuffered_python() -> None:
+    env = build_service_worker_env({"PATH": "/usr/bin"})
+    assert env["PYTHONUNBUFFERED"] == "1"
+    assert env["PATH"] == "/usr/bin"
+
+    preserved = build_service_worker_env({"PATH": "/usr/bin", "PYTHONUNBUFFERED": "0"})
+    assert preserved["PYTHONUNBUFFERED"] == "0"
 
 
 def test_read_service_status_reports_stopped_without_state(tmp_path: Path) -> None:

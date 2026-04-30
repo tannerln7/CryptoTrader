@@ -13,6 +13,7 @@ from .config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 from .contracts import build_market_event
 from .logging import configure_logging, get_logger
 from .runtime import RecorderRuntime
+from .sources.aster import AsterCaptureSummary, capture_aster
 from .sources.pyth import PythCaptureSummary, capture_pyth
 from .storage import (
     RawFileValidationSummary,
@@ -88,6 +89,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional maximum runtime for the Pyth capture command.",
     )
 
+    capture_aster_parser = subparsers.add_parser(
+        "capture-aster",
+        help="Capture live Aster non-depth market streams into raw storage.",
+    )
+    _add_config_arguments(capture_aster_parser)
+    capture_aster_parser.add_argument(
+        "--event-limit",
+        type=int,
+        default=None,
+        help="Optional maximum number of Aster events to capture before exiting.",
+    )
+    capture_aster_parser.add_argument(
+        "--duration-seconds",
+        type=float,
+        default=None,
+        help="Optional maximum runtime for the Aster capture command.",
+    )
+
     validate_raw_parser = subparsers.add_parser(
         "validate-raw",
         help="Validate an existing raw .jsonl.zst file.",
@@ -125,6 +144,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if command == "capture-pyth":
         configure_logging(config.logging.level, structured=config.logging.structured)
         return asyncio.run(_capture_pyth_command(config, args))
+    if command == "capture-aster":
+        configure_logging(config.logging.level, structured=config.logging.structured)
+        return asyncio.run(_capture_aster_command(config, args))
 
     configure_logging(config.logging.level, structured=config.logging.structured)
     return asyncio.run(_run_runtime_check(config))
@@ -172,6 +194,18 @@ def _format_validation_summary(summary: RawFileValidationSummary) -> str:
 def _format_pyth_capture_summary(summary: PythCaptureSummary) -> str:
     lines = [
         "Pyth capture complete",
+        f"Records: {summary.records_written}",
+        f"Reconnects: {summary.reconnect_count}",
+        f"Error records: {summary.error_record_count}",
+    ]
+    for path in summary.output_paths:
+        lines.append(f"Output path: {path}")
+    return "\n".join(lines)
+
+
+def _format_aster_capture_summary(summary: AsterCaptureSummary) -> str:
+    lines = [
+        "Aster capture complete",
         f"Records: {summary.records_written}",
         f"Reconnects: {summary.reconnect_count}",
         f"Error records: {summary.error_record_count}",
@@ -235,6 +269,17 @@ async def _capture_pyth_command(config, args: argparse.Namespace) -> int:
             duration_seconds=args.duration_seconds,
         )
     print(_format_pyth_capture_summary(summary))
+    return 0
+
+
+async def _capture_aster_command(config, args: argparse.Namespace) -> int:
+    async with RecorderRuntime.from_config(config) as runtime:
+        summary = await capture_aster(
+            runtime=runtime,
+            event_limit=args.event_limit,
+            duration_seconds=args.duration_seconds,
+        )
+    print(_format_aster_capture_summary(summary))
     return 0
 
 

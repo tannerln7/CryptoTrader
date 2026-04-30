@@ -46,6 +46,7 @@ EOF
 done
 
 PYTHON_BIN="${REPO_ROOT}/.venv/bin/python"
+INSTANCE_CONFIG_PATH="${REPO_ROOT}/data/systemd/${INSTANCE}/config.yaml"
 CONFIG_PATH="${REPO_ROOT}/config/config.example.yaml"
 ENV_DEST="/etc/market-recorder/${INSTANCE}.env"
 UNIT_DEST="/etc/systemd/system/market-recorder@.service"
@@ -55,7 +56,10 @@ POLKIT_GROUP=$(detect_polkit_group)
 OPERATOR_USER=${SUDO_USER:-}
 
 [[ -x "${PYTHON_BIN}" ]] || die "Missing virtualenv interpreter at ${PYTHON_BIN}"
-[[ -f "${CONFIG_PATH}" ]] || die "Missing default config at ${CONFIG_PATH}"
+if [[ -f "${INSTANCE_CONFIG_PATH}" ]]; then
+  CONFIG_PATH="${INSTANCE_CONFIG_PATH}"
+fi
+[[ -f "${CONFIG_PATH}" ]] || die "Missing installer config at ${CONFIG_PATH}"
 
 install_asset "${REPO_ROOT}/ops/systemd/market-recorder@.service" "${UNIT_DEST}" 0644 root root
 install_asset "${REPO_ROOT}/ops/sysusers/market-recorder.conf" "${SYSUSERS_DEST}" 0644 root root

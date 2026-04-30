@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -326,6 +326,39 @@ def load_config(
 		config_path=resolved_config_path,
 		sources_path=resolved_sources_path,
 		repo_root=repo_root,
+	)
+
+
+def apply_runtime_overrides(
+	config: RecorderConfig,
+	*,
+	data_root: str | Path | None = None,
+	log_level: str | None = None,
+) -> RecorderConfig:
+	runtime = config.runtime
+	logging_config = config.logging
+
+	if data_root is not None:
+		runtime = replace(
+			runtime,
+			data_root=_resolve_repo_path(data_root, config.repo_root),
+		)
+
+	if log_level is not None:
+		normalized_level = log_level.strip().upper()
+		if normalized_level not in _VALID_LOG_LEVELS:
+			raise ConfigError(
+				f"logging.level must be one of {sorted(_VALID_LOG_LEVELS)}, got {normalized_level!r}",
+			)
+		logging_config = replace(logging_config, level=normalized_level)
+
+	if runtime is config.runtime and logging_config is config.logging:
+		return config
+
+	return replace(
+		config,
+		runtime=runtime,
+		logging=logging_config,
 	)
 
 

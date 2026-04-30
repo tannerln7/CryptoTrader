@@ -3,8 +3,34 @@ from __future__ import annotations
 from pathlib import Path
 
 from market_recorder.alerts import TradingViewWebhookSummary
-from market_recorder.cli import main
+from market_recorder.cli import build_parser, main
+from market_recorder.service_control import (
+  RecorderServiceState,
+  RecorderServiceStatus,
+  default_service_paths,
+)
 from market_recorder.storage import validate_raw_file
+
+
+def _service_status(
+  tmp_path: Path,
+  *,
+  state: str,
+  pid: int | None = None,
+  service_state: RecorderServiceState | None = None,
+  message: str | None = None,
+) -> RecorderServiceStatus:
+  paths = default_service_paths(tmp_path)
+  return RecorderServiceStatus(
+    state=state,
+    state_path=paths.state_path,
+    lock_path=paths.lock_path,
+    log_path=paths.log_path,
+    pid=pid,
+    run_id=None if service_state is None else service_state.run_id,
+    message=message,
+    service_state=service_state,
+  )
 
 
 def test_cli_validate_config_reports_loaded_paths(capsys) -> None:
@@ -14,6 +40,30 @@ def test_cli_validate_config_reports_loaded_paths(capsys) -> None:
     assert exit_code == 0
     assert "Configuration valid:" in captured.out
     assert "Enabled sources: pyth, aster" in captured.out
+
+
+def test_parser_preserves_shared_config_before_subcommand() -> None:
+  args = build_parser().parse_args(["--config", "/tmp/custom-config.yaml", "start"])
+
+  assert args.config == "/tmp/custom-config.yaml"
+
+
+def test_cli_defaults_to_status_and_shows_start_hint(tmp_path: Path, capsys, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "market_recorder.cli.read_service_status",
+        lambda repo_root: _service_status(
+            tmp_path,
+            state="stopped",
+            message="Recorder service is not running.",
+        ),
+    )
+
+    exit_code = main([])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "Recorder service status" in captured.out
+    assert "Hint: run 'market-recorder start'" in captured.out
 
 
 def test_cli_reports_invalid_config_to_stderr(tmp_path: Path, capsys) -> None:
@@ -179,3 +229,74 @@ validation:
     assert exit_code == 0
     assert observed["runner_started"] is False
     assert "TradingView webhook server complete" in captured.out
+
+
+def test_cli_restart_reuses_saved_launch_spec_without_new_overrides(
+    tmp_path: Path,
+    capsys,
+    monkeypatch,
+) -> None:
+    service_state = RecorderServiceState(
+        pid=4321,
+        status="running",
+        run_id="recorder-test",
+        config_path=tmp_path / "saved-config.yaml",
+        sources_path=tmp_path / "saved-sources.yaml",
+        repo_root=tmp_path,
+        data_root=tmp_path / "saved-data",
+        log_level="WARNING",
+        structured_logging=False,
+        health_interval_seconds=30.0,
+        duration_seconds=120.0,
+        health_path_override=None,
+        health_path=tmp_path / "saved-data" / "health.json",
+        worker_log_path=tmp_path / "data" / "service" / "recorder-service.log",
+        started_at_utc="2026-04-30T00:00:00Z",
+        updated_at_utc="2026-04-30T00:00:10Z",
+        finished_at_utc=None,
+        message="Recorder service is running.",
+    )
+    running_status = _service_status(
+        tmp_path,
+        state="running",
+        pid=service_state.pid,
+        service_state=service_state,
+        message=service_state.message,
+    )
+    started_status = _service_status(
+        tmp_path,
+        state="running",
+        pid=9876,
+        service_state=service_state,
+        message="Recorder service restarted.",
+    )
+    observed: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "market_recorder.cli.read_service_status",
+        lambda repo_root: running_status,
+    )
+    monkeypatch.setattr(
+        "market_recorder.cli.stop_background_service",
+        lambda repo_root: _service_status(tmp_path, state="stopped", message="Recorder service stopped."),
+    )
+
+    def fake_start_background_service(launch_spec):
+        observed["launch_spec"] = launch_spec
+        return started_status
+
+    monkeypatch.setattr(
+        "market_recorder.cli.start_background_service",
+        fake_start_background_service,
+    )
+
+    exit_code = main(["restart"])
+    captured = capsys.readouterr()
+
+    launch_spec = observed["launch_spec"]
+    assert exit_code == 0
+    assert launch_spec.config_path == service_state.config_path
+    assert launch_spec.sources_path == service_state.sources_path
+    assert launch_spec.data_root == service_state.data_root
+    assert launch_spec.log_level == service_state.log_level
+    assert "Recorder service status" in captured.out

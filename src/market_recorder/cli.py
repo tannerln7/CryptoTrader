@@ -7,15 +7,33 @@ import asyncio
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from . import __version__
 from .alerts import TradingViewWebhookSummary, serve_tradingview_webhook
-from .config import DEFAULT_CONFIG_PATH, ConfigError, load_config
+from .config import (
+    DEFAULT_CONFIG_PATH,
+    REPO_ROOT,
+    ConfigError,
+    apply_runtime_overrides,
+    load_config,
+)
 from .contracts import build_market_event
 from .logging import configure_logging, get_logger
 from .quality import DataQualityReport, build_data_quality_report
 from .runtime import RecorderRuntime
 from .service import RecorderServiceSummary, run_recorder_service
+from .service_control import (
+    RecorderServiceLaunchSpec,
+    RecorderServiceStatus,
+    ServiceControlError,
+    build_service_launch_spec,
+    load_service_health,
+    read_service_status,
+    run_service_worker_foreground,
+    start_background_service,
+    stop_background_service,
+)
 from .sources.aster import AsterCaptureSummary, capture_aster
 from .sources.aster_depth import AsterDepthCaptureSummary, capture_aster_depth
 from .sources.pyth import PythCaptureSummary, capture_pyth
@@ -31,7 +49,8 @@ from .timeutil import make_run_id
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="market-recorder",
-        description="Phase 1 runtime contracts and recorder skeleton.",
+        description="Control and inspect the market recorder service.",
+        allow_abbrev=False,
     )
     parser.add_argument(
         "--version",
@@ -41,17 +60,49 @@ def build_parser() -> argparse.ArgumentParser:
     _add_config_arguments(parser)
 
     subparsers = parser.add_subparsers(dest="command")
+    start_parser = subparsers.add_parser(
+        "start",
+        help="Start the recorder service in the background.",
+    )
+    _add_config_arguments(start_parser, suppress_defaults=True)
+    _add_service_control_arguments(start_parser)
+
+    stop_parser = subparsers.add_parser(
+        "stop",
+        help="Stop the running recorder service.",
+    )
+    _add_config_arguments(stop_parser, suppress_defaults=True)
+
+    restart_parser = subparsers.add_parser(
+        "restart",
+        help="Restart the recorder service.",
+    )
+    _add_config_arguments(restart_parser, suppress_defaults=True)
+    _add_service_control_arguments(restart_parser)
+
+    status_parser = subparsers.add_parser(
+        "status",
+        help="Show recorder service status.",
+    )
+    _add_config_arguments(status_parser, suppress_defaults=True)
+
+    health_parser = subparsers.add_parser(
+        "health",
+        help="Show summarized recorder service health.",
+    )
+    _add_config_arguments(health_parser, suppress_defaults=True)
+
     validate_config_parser = subparsers.add_parser(
         "validate-config",
         help="Load and validate the runtime and sources config.",
     )
-    _add_config_arguments(validate_config_parser)
+    _add_config_arguments(validate_config_parser, suppress_defaults=True)
 
     write_sample_parser = subparsers.add_parser(
         "write-sample",
-        help="Write a sample raw .jsonl.zst file under the configured data root.",
+        help="Development/debug: write a sample raw .jsonl.zst file.",
     )
-    _add_config_arguments(write_sample_parser)
+    _add_config_arguments(write_sample_parser, suppress_defaults=True)
     write_sample_parser.add_argument("--source", default="sample", help="Logical source name for the sample route.")
     write_sample_parser.add_argument(
         "--transport",
@@ -71,38 +122,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser(
         "run",
-        help="Initialize the runtime skeleton and exit after startup checks.",
+        help="Development/debug: initialize the runtime and exit after startup checks.",
     )
-    _add_config_arguments(run_parser)
+    _add_config_arguments(run_parser, suppress_defaults=True)
 
     run_service_parser = subparsers.add_parser(
         "run-service",
-        help="Run the enabled recorder components as a bounded or long-lived service.",
+        help="Development/debug: run the recorder worker in the foreground.",
     )
-    _add_config_arguments(run_service_parser)
-    run_service_parser.add_argument(
-        "--duration-seconds",
-        type=float,
-        default=None,
-        help="Optional maximum runtime for the unattended recorder service.",
-    )
-    run_service_parser.add_argument(
-        "--health-interval-seconds",
-        type=float,
-        default=10.0,
-        help="Interval for writing the runtime health manifest.",
-    )
-    run_service_parser.add_argument(
-        "--health-path",
-        default=None,
-        help="Optional override path for the runtime health manifest JSON file.",
-    )
+    _add_config_arguments(run_service_parser, suppress_defaults=True)
+    _add_service_control_arguments(run_service_parser, health_interval_default=10.0)
 
     capture_pyth_parser = subparsers.add_parser(
         "capture-pyth",
-        help="Capture live Pyth SSE updates into raw storage.",
+        help="Development/debug: capture live Pyth SSE updates into raw storage.",
     )
-    _add_config_arguments(capture_pyth_parser)
+    _add_config_arguments(capture_pyth_parser, suppress_defaults=True)
     capture_pyth_parser.add_argument(
         "--event-limit",
         type=int,
@@ -118,9 +153,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     capture_aster_parser = subparsers.add_parser(
         "capture-aster",
-        help="Capture live Aster non-depth market streams into raw storage.",
+        help="Development/debug: capture live Aster non-depth market streams into raw storage.",
     )
-    _add_config_arguments(capture_aster_parser)
+    _add_config_arguments(capture_aster_parser, suppress_defaults=True)
     capture_aster_parser.add_argument(
         "--event-limit",
         type=int,
@@ -136,9 +171,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     capture_aster_depth_parser = subparsers.add_parser(
         "capture-aster-depth",
-        help="Capture Aster depth streams and periodic REST snapshots into raw storage.",
+        help="Development/debug: capture Aster depth streams and periodic REST snapshots into raw storage.",
     )
-    _add_config_arguments(capture_aster_depth_parser)
+    _add_config_arguments(capture_aster_depth_parser, suppress_defaults=True)
     capture_aster_depth_parser.add_argument(
         "--event-limit",
         type=int,
@@ -154,9 +189,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     serve_tradingview_parser = subparsers.add_parser(
         "serve-tradingview",
-        help="Serve the TradingView webhook receiver and write raw alert events.",
+        help="Development/debug: serve the TradingView webhook receiver and write raw alert events.",
     )
-    _add_config_arguments(serve_tradingview_parser)
+    _add_config_arguments(serve_tradingview_parser, suppress_defaults=True)
     serve_tradingview_parser.add_argument(
         "--duration-seconds",
         type=float,
@@ -196,13 +231,20 @@ def build_parser() -> argparse.ArgumentParser:
         "report-data-quality",
         help="Report missing, stale, or invalid raw routes for the current config.",
     )
-    _add_config_arguments(report_quality_parser)
+    _add_config_arguments(report_quality_parser, suppress_defaults=True)
     report_quality_parser.add_argument(
         "--stale-after-seconds",
         type=float,
         default=900.0,
         help="Maximum acceptable age for the newest raw file on each expected route.",
     )
+
+    worker_parser = subparsers.add_parser(
+        "service-worker",
+        help=argparse.SUPPRESS,
+    )
+    _add_config_arguments(worker_parser, suppress_defaults=True)
+    _add_service_control_arguments(worker_parser, health_interval_default=10.0)
     return parser
 
 
@@ -214,21 +256,38 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(__version__)
         return 0
 
+    command = args.command or "status"
+
     if args.command == "validate-raw":
         summary = validate_raw_file(Path(args.path))
         print(_format_validation_summary(summary))
         return 0
 
+    if command == "status":
+        return _status_command(include_hint=args.command is None)
+    if command == "stop":
+        return _stop_command()
+    if command == "health":
+        return _health_command()
+
     try:
-        config = load_config(args.config, sources_path=args.sources)
+        config = load_config(args.config or DEFAULT_CONFIG_PATH, sources_path=args.sources)
+        config = apply_runtime_overrides(
+            config,
+            data_root=args.data_root,
+            log_level=args.log_level,
+        )
     except ConfigError as exc:
         print(f"Configuration error: {exc}", file=sys.stderr)
         return 2
 
-    command = args.command or "run"
     if command == "validate-config":
         print(_format_config_summary(config))
         return 0
+    if command == "start":
+        return _start_command(config, args)
+    if command == "restart":
+        return _restart_command(config, args)
     if command == "write-sample":
         print(_write_sample_output(config, args))
         return 0
@@ -247,6 +306,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if command == "run-service":
         configure_logging(config.logging.level, structured=config.logging.structured)
         return asyncio.run(_run_service_command(config, args))
+    if command == "service-worker":
+        configure_logging(config.logging.level, structured=config.logging.structured)
+        return asyncio.run(_service_worker_command(config, args))
     if command == "report-data-quality":
         report = build_data_quality_report(config, stale_after_seconds=args.stale_after_seconds)
         print(_format_data_quality_report(report))
@@ -272,6 +334,7 @@ def _format_config_summary(config) -> str:
             f"Configuration valid: {config.config_path}",
             f"Sources config: {config.sources_path}",
             f"Data root: {config.runtime.data_root}",
+            f"Log level: {config.logging.level}",
             f"Enabled sources: {_format_enabled_sources(config.enabled_sources)}",
             f"Storage format: {config.storage.format}",
             f"Rotation: {config.storage.rotation}",
@@ -360,6 +423,71 @@ def _format_service_summary(summary: RecorderServiceSummary) -> str:
         lines.append(
             f"Output {component_name}: {observation.file_count} file(s), latest={observation.latest_output_utc}",
         )
+    return "\n".join(lines)
+
+
+def _format_service_status(status: RecorderServiceStatus, *, include_hint: bool = False) -> str:
+    lines = [
+        "Recorder service status",
+        f"State: {status.state}",
+        f"Service log: {status.log_path}",
+        f"State file: {status.state_path}",
+    ]
+    if status.pid is not None:
+        lines.append(f"PID: {status.pid}")
+    if status.run_id is not None:
+        lines.append(f"Run ID: {status.run_id}")
+    if status.service_state is not None:
+        state = status.service_state
+        lines.append(f"Config: {state.config_path}")
+        lines.append(f"Sources: {state.sources_path}")
+        lines.append(f"Data root: {state.data_root}")
+        if state.started_at_utc is not None:
+            lines.append(f"Started: {state.started_at_utc}")
+        lines.append(f"Updated: {state.updated_at_utc}")
+        if state.finished_at_utc is not None:
+            lines.append(f"Finished: {state.finished_at_utc}")
+        if state.health_path is not None:
+            lines.append(f"Health manifest: {state.health_path}")
+    if status.message:
+        lines.append(f"Message: {status.message}")
+    if include_hint and not status.is_running:
+        lines.append("Hint: run 'market-recorder start' to start the recorder service.")
+    return "\n".join(lines)
+
+
+def _format_service_health(status: RecorderServiceStatus, payload: dict[str, Any] | None) -> str:
+    lines = [
+        "Recorder service health",
+        f"Service state: {status.state}",
+    ]
+    if status.run_id is not None:
+        lines.append(f"Run ID: {status.run_id}")
+
+    state = status.service_state
+    if state is not None and state.health_path is not None:
+        lines.append(f"Health manifest: {state.health_path}")
+
+    if payload is None:
+        lines.append("Health data: unavailable")
+        if status.message:
+            lines.append(f"Message: {status.message}")
+        return "\n".join(lines)
+
+    lines.append(f"Updated: {payload.get('updated_at_utc', 'unknown')}")
+    enabled_components = payload.get("enabled_components") or []
+    lines.append(
+        "Enabled components: " + (", ".join(enabled_components) if enabled_components else "none"),
+    )
+    component_statuses = payload.get("component_statuses") or {}
+    for component_name, component_status in sorted(component_statuses.items()):
+        lines.append(f"Component {component_name}: {component_status}")
+
+    component_outputs = payload.get("component_outputs") or {}
+    for component_name, observation in sorted(component_outputs.items()):
+        latest_output = observation.get("latest_output_utc") if isinstance(observation, dict) else None
+        file_count = observation.get("file_count") if isinstance(observation, dict) else None
+        lines.append(f"Output {component_name}: {file_count} file(s), latest={latest_output}")
     return "\n".join(lines)
 
 
@@ -483,6 +611,11 @@ async def _serve_tradingview_command(config, args: argparse.Namespace) -> int:
 
 
 async def _run_service_command(config, args: argparse.Namespace) -> int:
+    running_status = read_service_status(REPO_ROOT)
+    if running_status.is_running:
+        print(_format_service_status(running_status), file=sys.stderr)
+        return 1
+
     runtime = RecorderRuntime.from_config(config)
     try:
         summary = await run_recorder_service(
@@ -497,16 +630,159 @@ async def _run_service_command(config, args: argparse.Namespace) -> int:
     return 0
 
 
-def _add_config_arguments(parser: argparse.ArgumentParser) -> None:
+async def _service_worker_command(config, args: argparse.Namespace) -> int:
+    return await run_service_worker_foreground(
+        config,
+        health_interval_seconds=args.health_interval_seconds,
+        health_path=Path(args.health_path) if args.health_path else None,
+        duration_seconds=args.duration_seconds,
+    )
+
+
+def _add_config_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    suppress_defaults: bool = False,
+) -> None:
+    default_value = argparse.SUPPRESS if suppress_defaults else None
     parser.add_argument(
         "--config",
-        default=str(DEFAULT_CONFIG_PATH),
+        default=default_value,
         help="Path to the runtime config file.",
     )
     parser.add_argument(
         "--sources",
-        default=None,
+        default=default_value,
         help="Optional override path to the sources config file.",
+    )
+    parser.add_argument(
+        "--data-root",
+        default=default_value,
+        help="Optional override data root for this invocation.",
+    )
+    parser.add_argument(
+        "--log-level",
+        default=default_value,
+        help="Optional override log level for this invocation.",
+    )
+
+
+def _add_service_control_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    health_interval_default: float | None = None,
+) -> None:
+    parser.add_argument(
+        "--duration-seconds",
+        type=float,
+        default=None,
+        help="Optional maximum runtime for the recorder service.",
+    )
+    parser.add_argument(
+        "--health-interval-seconds",
+        type=float,
+        default=health_interval_default,
+        help="Optional interval for writing the runtime health manifest.",
+    )
+    parser.add_argument(
+        "--health-path",
+        default=None,
+        help="Optional override path for the runtime health manifest JSON file.",
+    )
+
+
+def _status_command(*, include_hint: bool = False) -> int:
+    try:
+        status = read_service_status(REPO_ROOT)
+    except ServiceControlError as exc:
+        print(f"Service control error: {exc}", file=sys.stderr)
+        return 1
+
+    print(_format_service_status(status, include_hint=include_hint))
+    return 0 if status.is_running else 1
+
+
+def _stop_command() -> int:
+    try:
+        status = stop_background_service(REPO_ROOT)
+    except ServiceControlError as exc:
+        print(f"Service control error: {exc}", file=sys.stderr)
+        return 1
+
+    print(_format_service_status(status))
+    return 0
+
+
+def _health_command() -> int:
+    try:
+        status, payload = load_service_health(REPO_ROOT)
+    except ServiceControlError as exc:
+        print(f"Service control error: {exc}", file=sys.stderr)
+        return 1
+
+    print(_format_service_health(status, payload))
+    return 0 if status.is_running and payload is not None else 1
+
+
+def _start_command(config, args: argparse.Namespace) -> int:
+    try:
+        launch_spec = _build_launch_spec(config, args)
+        status = start_background_service(launch_spec)
+    except ServiceControlError as exc:
+        print(f"Service control error: {exc}", file=sys.stderr)
+        return 1
+
+    print(_format_service_status(status))
+    return 0
+
+
+def _restart_command(config, args: argparse.Namespace) -> int:
+    try:
+        current_status = read_service_status(REPO_ROOT)
+        if current_status.is_running:
+            stop_background_service(REPO_ROOT)
+
+        launch_spec = _build_restart_launch_spec(config, args, current_status)
+        status = start_background_service(launch_spec)
+    except ServiceControlError as exc:
+        print(f"Service control error: {exc}", file=sys.stderr)
+        return 1
+
+    print(_format_service_status(status))
+    return 0
+
+
+def _build_launch_spec(config, args: argparse.Namespace) -> RecorderServiceLaunchSpec:
+    return build_service_launch_spec(
+        config,
+        health_interval_seconds=args.health_interval_seconds,
+        health_path=args.health_path,
+        duration_seconds=args.duration_seconds,
+    )
+
+
+def _build_restart_launch_spec(
+    config,
+    args: argparse.Namespace,
+    current_status: RecorderServiceStatus,
+) -> RecorderServiceLaunchSpec:
+    if not _has_service_start_overrides(args) and current_status.service_state is not None:
+        return current_status.service_state.to_launch_spec()
+    return _build_launch_spec(config, args)
+
+
+def _has_service_start_overrides(args: argparse.Namespace) -> bool:
+    return any(
+            value is not None
+            for value in (
+                args.config,
+                args.sources,
+                args.data_root,
+                args.log_level,
+                args.health_interval_seconds,
+                args.health_path,
+                args.duration_seconds,
+            )
     )
 
 

@@ -93,13 +93,13 @@ Refs: `3bc71a4`; `docs/phases/raw-recorder/phase2.md`; `src/market_recorder/stor
 
 ### Phase 3 — Pyth reference stream capture
 
-Status: planned
+Status: implemented
 
-Description: Pyth Hermes reference-price capture is planned as the first live raw stream integration.
+Description: The repo now has a live Pyth Hermes SSE adapter, bounded CLI capture command, reconnect-aware looping, and validated raw reference-event output under the canonical Pyth storage path.
 
-Notes: Phase 3 should preserve source payloads, provider timing metadata, and feed-level config without blending reference prices into exchange streams, while reusing the Phase 2 storage and validation path.
+Notes: The current implementation writes multi-feed raw envelopes under `raw/pyth/sse/MULTI/price_stream/...` and keeps Pyth isolated from all other source ingest paths.
 
-Refs: `3bc71a4`; `docs/phases/raw-recorder/phase3.md`; `docs/reference/providers/pyth.md`
+Refs: `e0dce93`; `docs/phases/raw-recorder/phase3.md`; `docs/reference/providers/pyth.md`; `src/market_recorder/sources/pyth.py`
 
 ### Phase 4 — Aster market stream capture
 
@@ -107,9 +107,9 @@ Status: planned
 
 Description: Aster trade, ticker, mark-price, liquidation, and baseline market stream capture is planned after the recorder core and storage layers exist.
 
-Notes: Source integrations should remain config-driven, connection-aware, and independent at ingest.
+Notes: Source integrations should remain config-driven, connection-aware, and independent at ingest while reusing the runtime, storage, and validation patterns already proven by the Pyth path.
 
-Refs: `4a88c06`; `docs/phases/raw-recorder/phase4.md`; `docs/reference/providers/aster.md`
+Refs: `e0dce93`; `docs/phases/raw-recorder/phase4.md`; `docs/reference/providers/aster.md`
 
 ### Phase 5 — Aster snapshots and depth capture
 

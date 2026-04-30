@@ -2,15 +2,16 @@
 
 This repository is a long-lived market-data and trading-research workspace.
 
-The repo now includes the Phase 0 scaffold, the Phase 1 runtime-contract foundation, and the Phase 2 storage and validation foundation. Live market-data capture has not started yet.
+The repo now includes the Phase 0 scaffold, the Phase 1 runtime-contract foundation, the Phase 2 storage and validation foundation, and the Phase 3 live Pyth capture path.
 
 ## Current Status
 
 - Phase 0 scaffold: implemented
 - Phase 1 runtime contracts and recorder skeleton: implemented
 - Phase 2 storage, rotation, and raw validation foundations: implemented
-- Live market-data capture: not implemented yet
-- Next implementation phase: Pyth reference stream capture
+- Phase 3 Pyth reference stream capture: implemented
+- Live Aster and TradingView capture: not implemented yet
+- Next implementation phase: Aster market stream capture
 
 ## Repo Defaults
 
@@ -73,6 +74,12 @@ Validate a raw file without loading it all into memory:
 market-recorder validate-raw path/to/file.jsonl.zst
 ```
 
+Capture a bounded live Pyth sample:
+
+```bash
+market-recorder capture-pyth --event-limit 2 --duration-seconds 20
+```
+
 ## Canonical Layout
 
 Important paths:
@@ -105,7 +112,7 @@ These files are safe examples only. Do not commit real secrets or private endpoi
 - Keep `data/` local and untracked except for committed placeholders.
 - Update the relevant docs when behavior, structure, or assumptions change.
 
-## Implemented Through Phase 2
+## Implemented Through Phase 3
 
 The repo currently provides:
 
@@ -117,6 +124,7 @@ The repo currently provides:
 - canonical raw path generation aligned with the data-layout reference
 - a streaming Zstandard JSONL writer with hourly rotation
 - a streaming raw-file validator and sample-write CLI path
+- a live Pyth Hermes SSE capture command that writes raw reference events to canonical storage
 - focused unit coverage for config loading, envelope helpers, runtime lifecycle, CLI behavior, time helpers, storage pathing, writer rotation, and raw validation
 
-The repo can now generate and validate sample raw files locally, but it still does not connect to live providers.
+The repo can now generate and validate sample raw files locally and capture bounded live Pyth events, but Aster and TradingView integrations are still pending.

@@ -111,7 +111,8 @@ Current implemented foundation:
 * `src/market_recorder/timeutil.py` and `src/market_recorder/logging.py` provide UTC timestamp, run-id, and logging conventions.
 * `src/market_recorder/runtime.py` provides the aiohttp cleanup-context runtime container and shared client session used by later phases.
 * `src/market_recorder/storage/` now provides canonical raw-path generation, a streaming `.jsonl.zst` writer, and a streaming raw-file validator.
-* `src/market_recorder/cli.py` currently supports `validate-config`, a runtime bootstrap check, sample raw writing, and raw-file validation but does not connect to providers yet.
+* `src/market_recorder/sources/pyth.py` provides the first live source adapter, including Hermes SSE payload parsing and reconnect-aware capture.
+* `src/market_recorder/cli.py` currently supports `validate-config`, a runtime bootstrap check, sample raw writing, raw-file validation, and bounded live Pyth capture.
 
 Raw recording is the first data layer. Its job is intentionally narrow:
 
@@ -127,7 +128,7 @@ reconnect on failure
 
 Raw recording should not calculate indicators, normalize away source fields, blend prices, run backtests, make trade decisions, or place orders.
 
-The repo is now structurally ready for Phase 3 live source work, but it still has no live transport behavior.
+The repo is now structurally ready for the broader Phase 4 Aster work, and the first live source path has been proven with Pyth.
 
 Use these references for implementation details:
 

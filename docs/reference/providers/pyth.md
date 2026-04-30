@@ -82,6 +82,7 @@ Recorder implication:
 * Treat reconnect as baseline behavior, not as optional hardening.
 * Preserve raw event payloads as received.
 * Reuse a managed HTTP client session rather than creating new sessions repeatedly.
+* A bounded live capture run through the repo's `capture-pyth` command succeeded on 2026-04-30 against the public Hermes endpoint and produced valid raw files under the canonical Pyth path layout.
 
 ---
 

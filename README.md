@@ -2,13 +2,14 @@
 
 This repository is a long-lived market-data and trading-research workspace.
 
-Phase 0 establishes the canonical scaffold only. No live recorder behavior is implemented yet.
+The repo now includes the Phase 0 scaffold and the Phase 1 runtime-contract foundation. Live market-data capture has not started yet.
 
 ## Current Status
 
-- Phase 0 scaffold: in progress in the working tree
+- Phase 0 scaffold: implemented
+- Phase 1 runtime contracts and recorder skeleton: implemented
 - Live market-data capture: not implemented yet
-- Next implementation phase after scaffold: runtime contracts and recorder skeleton
+- Next implementation phase: storage, rotation, and raw validation foundations
 
 ## Repo Defaults
 
@@ -47,6 +48,18 @@ pytest
 ruff check .
 ```
 
+Validate the example config files:
+
+```bash
+market-recorder validate-config
+```
+
+Run the current runtime bootstrap check:
+
+```bash
+market-recorder run
+```
+
 ## Canonical Layout
 
 Important paths:
@@ -79,14 +92,15 @@ These files are safe examples only. Do not commit real secrets or private endpoi
 - Keep `data/` local and untracked except for committed placeholders.
 - Update the relevant docs when behavior, structure, or assumptions change.
 
-## Phase 0 Scope
+## Implemented Through Phase 1
 
-Phase 0 is intentionally structural:
+The repo currently provides:
 
-- create the canonical repo scaffold
-- make ownership explicit
-- add minimal package placeholders
-- add safe example config
-- add baseline validation hooks
+- the canonical scaffold and ownership layout from Phase 0
+- typed runtime and source config loading from YAML examples
+- UTC timestamp and run-id helpers
+- raw envelope helper functions aligned with the schema docs
+- an aiohttp-managed runtime skeleton with cleanup contexts and a shared client session
+- focused unit coverage for config loading, envelope helpers, runtime lifecycle, CLI behavior, and time helpers
 
-It should reduce ambiguity, not add runtime complexity.
+The repo still does not write raw files or connect to live providers.

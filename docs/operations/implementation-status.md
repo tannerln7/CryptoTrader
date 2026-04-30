@@ -73,13 +73,13 @@ Refs: `4a88c06`; `docs/phases/raw-recorder/phase0.md`
 
 ### Phase 1 — Runtime contracts and recorder skeleton
 
-Status: planned
+Status: implemented
 
-Description: Source-agnostic recorder foundations such as config loading, timestamp utilities, path generation, runtime contracts, and recorder orchestration are planned but not yet implemented.
+Description: The repo now has typed runtime and source config loading, UTC and run-id helpers, raw-envelope helpers, logging setup, a CLI bootstrap path, and an aiohttp cleanup-context runtime container with a shared client session.
 
-Notes: Keep this phase lightweight and reusable across providers.
+Notes: The current runtime skeleton intentionally stops before source transport and raw-file writing. Phase 2 should reuse the validated config and lifecycle surfaces instead of redefining them.
 
-Refs: `4a88c06`; `docs/phases/raw-recorder/phase1.md`
+Refs: `242d9aa`; `docs/phases/raw-recorder/phase1.md`; `src/market_recorder/runtime.py`; `src/market_recorder/contracts.py`
 
 ### Phase 2 — Storage, rotation, and raw validation foundations
 
@@ -87,9 +87,9 @@ Status: planned
 
 Description: Raw file writing, rotation, compression, manifest handling, and validation tooling are planned before live source capture begins.
 
-Notes: Preserve append-only raw storage semantics and keep validation representative and deterministic.
+Notes: Phase 2 should build on the existing `jsonl.zst` config contract, append-only raw storage semantics, and the Phase 1 runtime cleanup model rather than revisiting those choices.
 
-Refs: `4a88c06`; `docs/phases/raw-recorder/phase2.md`
+Refs: `242d9aa`; `docs/phases/raw-recorder/phase2.md`
 
 ### Phase 3 — Pyth reference stream capture
 

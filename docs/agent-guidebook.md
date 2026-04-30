@@ -77,6 +77,8 @@ Canonical structure and naming live in `AGENTS.md`. Important paths:
 
 ```text
 src/market_recorder/          # Python package
+src/market_recorder/contracts.py
+src/market_recorder/runtime.py
 src/market_recorder/sources/  # provider adapters
 src/market_recorder/storage/  # raw writers, paths, manifests
 src/market_recorder/normalize/
@@ -102,6 +104,14 @@ Do not create one-off top-level folders for phase work. Add new functionality in
 
 ## 5) Raw Recording Overview
 
+Current implemented foundation:
+
+* `src/market_recorder/config.py` loads and validates the runtime and source example configs.
+* `src/market_recorder/contracts.py` defines the raw-envelope helpers aligned with `docs/reference/schemas.md`.
+* `src/market_recorder/timeutil.py` and `src/market_recorder/logging.py` provide UTC timestamp, run-id, and logging conventions.
+* `src/market_recorder/runtime.py` provides the aiohttp cleanup-context runtime container and shared client session used by later phases.
+* `src/market_recorder/cli.py` currently supports `validate-config` and a runtime bootstrap check but does not connect to providers yet.
+
 Raw recording is the first data layer. Its job is intentionally narrow:
 
 ```text
@@ -115,6 +125,8 @@ reconnect on failure
 ```
 
 Raw recording should not calculate indicators, normalize away source fields, blend prices, run backtests, make trade decisions, or place orders.
+
+The repo is now structurally ready for Phase 2 storage work and later source integrations, but it still has no live transport or raw-file writing behavior.
 
 Use these references for implementation details:
 

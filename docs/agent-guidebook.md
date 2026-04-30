@@ -114,7 +114,8 @@ Current implemented foundation:
 * `src/market_recorder/sources/pyth.py` provides the first live source adapter, including Hermes SSE payload parsing and reconnect-aware capture.
 * `src/market_recorder/sources/aster.py` provides the non-depth combined-stream capture path for Aster market data.
 * `src/market_recorder/sources/aster_depth.py` provides periodic REST depth snapshots plus partial-depth and diff-depth capture, including restart-required continuity checks when diff-depth `pu` no longer matches the prior `u`.
-* `src/market_recorder/cli.py` currently supports `validate-config`, a runtime bootstrap check, sample raw writing, raw-file validation, bounded live Pyth capture, and bounded live Aster capture.
+* `src/market_recorder/alerts/tradingview.py` provides the TradingView webhook receiver and preserves both JSON and plain-text request bodies as raw alert events.
+* `src/market_recorder/cli.py` currently supports `validate-config`, a runtime bootstrap check, sample raw writing, raw-file validation, bounded live Pyth capture, bounded live Aster capture, bounded Aster depth capture, and TradingView webhook serving.
 * `config/sources.example.yaml` now documents the Aster depth snapshot cadence under `aster.depth`.
 
 Raw recording is the first data layer. Its job is intentionally narrow:
@@ -131,7 +132,7 @@ reconnect on failure
 
 Raw recording should not calculate indicators, normalize away source fields, blend prices, run backtests, make trade decisions, or place orders.
 
-The repo is now structurally ready for Phase 6 webhook capture work, and the current live source paths have been proven with Pyth, Aster non-depth streams, and Aster depth plus snapshot capture.
+The repo is now structurally ready for Phase 7 operational hardening work, and the current live source paths have been proven with Pyth, Aster non-depth streams, Aster depth plus snapshot capture, and local TradingView-compatible webhook delivery.
 
 Use these references for implementation details:
 

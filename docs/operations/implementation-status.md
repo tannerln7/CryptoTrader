@@ -123,13 +123,13 @@ Refs: `2e0fe9f`; `docs/phases/raw-recorder/phase5.md`; `docs/reference/providers
 
 ### Phase 6 — TradingView alert and label capture
 
-Status: planned
+Status: implemented
 
-Description: TradingView or similar alert events are planned as raw label streams that can later be joined with market data.
+Description: The repo now has an aiohttp-based TradingView webhook receiver, a CLI command to serve it locally, and validated raw alert output for both JSON and plain-text webhook bodies.
 
-Notes: Keep alert payloads structured, authenticated where appropriate, and preserved as raw events. This is now the next implementation phase after Aster depth and snapshot capture.
+Notes: The current implementation preserves valid JSON payloads as structured objects, preserves non-JSON payloads as plain text, writes canonical raw alert events quickly, and keeps the request path intentionally lightweight. Phase 7 should build on this runtime surface rather than moving alert capture into a separate stack.
 
-Refs: `4a88c06`; `docs/phases/raw-recorder/phase6.md`; `docs/reference/providers/tradingview.md`
+Refs: `2eaf53a`; `docs/phases/raw-recorder/phase6.md`; `docs/reference/providers/tradingview.md`; `src/market_recorder/alerts/tradingview.py`
 
 ### Phase 7 — Operational hardening and unattended runtime
 
@@ -137,7 +137,7 @@ Status: planned
 
 Description: Service management, health visibility, reconnect resilience, and data-quality checks are planned after the raw capture path is functional.
 
-Notes: Favor lightweight observability and clear operator signals before adding heavier infrastructure.
+Notes: Favor lightweight observability and clear operator signals before adding heavier infrastructure. This is now the next implementation phase after the TradingView webhook receiver.
 
 Refs: `4a88c06`; `docs/phases/raw-recorder/phase7.md`
 

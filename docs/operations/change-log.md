@@ -23,6 +23,7 @@ Use it to record implemented repo changes and meaningful documentation updates i
 
 ## 2026-04-30
 
+- `2eaf53a` — implemented the Phase 6 TradingView webhook path with bounded local serving, canonical raw alert storage, and explicit JSON versus plain-text preservation.
 - `2e0fe9f` — implemented the Phase 5 Aster depth path with periodic REST snapshots, bounded partial/diff-depth capture, and diff-depth continuity restart detection.
 - `5874f41` — implemented the Phase 4 Aster non-depth capture path with combined-stream routing, bounded CLI capture validation, and corrected case-sensitive stream suffix handling based on live behavior.
 - `e0dce93` — implemented the Phase 3 Pyth source adapter with live Hermes SSE capture, reconnect-aware looping, and bounded CLI capture validation against the public endpoint.

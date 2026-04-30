@@ -48,6 +48,7 @@ Recorder implication:
 
 * Structured payloads intended for machine use should be valid JSON.
 * The receiver should explicitly decide how to handle plain-text bodies instead of assuming JSON.
+* The current recorder implementation preserves valid JSON bodies as structured objects and preserves non-JSON request bodies as plain text under the raw alert payload.
 
 ---
 
@@ -258,7 +259,7 @@ POST /webhook/tradingview
 Expected behavior:
 
 * Accept valid JSON payloads.
-* Optionally preserve plain-text bodies explicitly if the project chooses to support them.
+* Preserve plain-text bodies explicitly when the request is not JSON.
 * Timestamp receive time immediately.
 * Wrap the payload as `raw.alert_event.v1`.
 * Write the raw record quickly.
@@ -318,3 +319,7 @@ raw/tradingview/webhook/ALL/alert/date=YYYY-MM-DD/hour=HH/part-0000.jsonl.zst
 ## Notes
 
 TradingView is useful as a durable label and event stream, but it should remain separate from raw exchange and oracle market data. Join these sources later by timestamp when analysis or labeling logic actually needs them.
+
+Validation note:
+
+* A bounded local run through the repo's `serve-tradingview` command succeeded on 2026-04-30, writing one JSON alert and one `text/plain` alert as `raw.alert_event.v1` records under the canonical TradingView webhook path.

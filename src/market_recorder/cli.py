@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from . import __version__
+from .alerts import TradingViewWebhookSummary, serve_tradingview_webhook
 from .config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 from .contracts import build_market_event
 from .logging import configure_logging, get_logger
@@ -126,6 +127,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional maximum runtime for the Aster depth capture command.",
     )
 
+    serve_tradingview_parser = subparsers.add_parser(
+        "serve-tradingview",
+        help="Serve the TradingView webhook receiver and write raw alert events.",
+    )
+    _add_config_arguments(serve_tradingview_parser)
+    serve_tradingview_parser.add_argument(
+        "--duration-seconds",
+        type=float,
+        default=None,
+        help="Optional maximum runtime for the TradingView webhook server.",
+    )
+    serve_tradingview_parser.add_argument(
+        "--request-limit",
+        type=int,
+        default=None,
+        help="Optional maximum number of accepted webhook requests before exiting.",
+    )
+    serve_tradingview_parser.add_argument(
+        "--bind-host",
+        default=None,
+        help="Optional override bind host for the webhook server.",
+    )
+    serve_tradingview_parser.add_argument(
+        "--bind-port",
+        type=int,
+        default=None,
+        help="Optional override bind port for the webhook server.",
+    )
+    serve_tradingview_parser.add_argument(
+        "--path",
+        default=None,
+        help="Optional override request path for the webhook server.",
+    )
+
     validate_raw_parser = subparsers.add_parser(
         "validate-raw",
         help="Validate an existing raw .jsonl.zst file.",
@@ -169,6 +204,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if command == "capture-aster-depth":
         configure_logging(config.logging.level, structured=config.logging.structured)
         return asyncio.run(_capture_aster_depth_command(config, args))
+    if command == "serve-tradingview":
+        configure_logging(config.logging.level, structured=config.logging.structured)
+        return asyncio.run(_serve_tradingview_command(config, args))
 
     configure_logging(config.logging.level, structured=config.logging.structured)
     return asyncio.run(_run_runtime_check(config))
@@ -251,6 +289,19 @@ def _format_aster_depth_capture_summary(summary: AsterDepthCaptureSummary) -> st
     return "\n".join(lines)
 
 
+def _format_tradingview_summary(summary: TradingViewWebhookSummary) -> str:
+    lines = [
+        "TradingView webhook server complete",
+        f"Requests: {summary.request_count}",
+        f"Error records: {summary.error_record_count}",
+        f"Bind address: {summary.bind_host}:{summary.bind_port}",
+        f"Path: {summary.path}",
+    ]
+    for path in summary.output_paths:
+        lines.append(f"Output path: {path}")
+    return "\n".join(lines)
+
+
 def _write_sample_output(config, args: argparse.Namespace) -> str:
     route = RawStreamRoute(
         source=args.source,
@@ -327,6 +378,23 @@ async def _capture_aster_depth_command(config, args: argparse.Namespace) -> int:
             duration_seconds=args.duration_seconds,
         )
     print(_format_aster_depth_capture_summary(summary))
+    return 0
+
+
+async def _serve_tradingview_command(config, args: argparse.Namespace) -> int:
+    runtime = RecorderRuntime.from_config(config)
+    try:
+        summary = await serve_tradingview_webhook(
+            runtime=runtime,
+            duration_seconds=args.duration_seconds,
+            request_limit=args.request_limit,
+            bind_host=args.bind_host,
+            bind_port=args.bind_port,
+            path=args.path,
+        )
+    finally:
+        await runtime.close()
+    print(_format_tradingview_summary(summary))
     return 0
 
 

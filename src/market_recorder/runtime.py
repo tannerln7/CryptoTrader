@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import aiohttp
@@ -35,6 +35,7 @@ class RecorderRuntime:
     config: RecorderConfig
     app: web.Application
     _runner: web.AppRunner | None = None
+    _sites: list[web.BaseSite] = field(default_factory=list)
 
     @classmethod
     def from_config(cls, config: RecorderConfig) -> "RecorderRuntime":
@@ -63,11 +64,23 @@ class RecorderRuntime:
         self._runner = runner
 
 
+    async def start_site(self, host: str, port: int) -> web.TCPSite:
+        await self.start()
+        if self._runner is None:
+            raise RuntimeError("Recorder runtime runner was not initialized")
+
+        site = web.TCPSite(self._runner, host, port)
+        await site.start()
+        self._sites.append(site)
+        return site
+
+
     async def close(self) -> None:
         if self._runner is None:
             return
         await self._runner.cleanup()
         self._runner = None
+        self._sites.clear()
 
 
     async def __aenter__(self) -> "RecorderRuntime":

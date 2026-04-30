@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from market_recorder.alerts import TradingViewWebhookSummary
 from market_recorder.cli import main
 from market_recorder.storage import validate_raw_file
 
@@ -99,3 +100,82 @@ validation:
     raw_path = Path(captured.out.splitlines()[0].split(": ", 1)[1])
     summary = validate_raw_file(raw_path)
     assert summary.record_count == 2
+
+
+def test_cli_serve_tradingview_passes_unstarted_runtime(tmp_path: Path, capsys, monkeypatch) -> None:
+    observed: dict[str, bool] = {}
+
+    async def fake_serve_tradingview_webhook(**kwargs) -> TradingViewWebhookSummary:
+        runtime = kwargs["runtime"]
+        observed["runner_started"] = runtime._runner is not None
+        return TradingViewWebhookSummary(
+            request_count=0,
+            error_record_count=0,
+            bind_host="127.0.0.1",
+            bind_port=18080,
+            path="/webhook/test",
+            output_paths=(),
+        )
+
+    monkeypatch.setattr(
+        "market_recorder.cli.serve_tradingview_webhook",
+        fake_serve_tradingview_webhook,
+    )
+
+    sources_path = tmp_path / "sources.yaml"
+    sources_path.write_text(
+        """
+pyth:
+  enabled: false
+  provider: hermes
+  http_base_url: https://hermes.pyth.network
+  feeds: []
+aster:
+  enabled: false
+  rest_base_url: https://fapi.asterdex.com
+  ws_base_url: wss://fstream.asterdex.com
+  symbols: []
+  streams: []
+tradingview:
+  enabled: true
+  webhook:
+    bind_host: 127.0.0.1
+    bind_port: 8000
+    path: /webhook/tradingview
+""".strip(),
+        encoding="utf-8",
+    )
+
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f"""
+runtime:
+  environment: development
+  timezone: UTC
+  data_root: {tmp_path / 'data'}
+  sources_config: {sources_path}
+logging:
+  level: INFO
+  structured: false
+storage:
+  format: jsonl.zst
+  rotation: hourly
+  compression_level: 3
+validation:
+  enable_sample_checks: true
+""".strip(),
+        encoding="utf-8",
+    )
+
+    exit_code = main([
+        "serve-tradingview",
+        "--config",
+        str(config_path),
+        "--duration-seconds",
+        "0.01",
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert observed["runner_started"] is False
+    assert "TradingView webhook server complete" in captured.out

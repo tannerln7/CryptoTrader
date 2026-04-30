@@ -184,6 +184,7 @@ Recorder implications:
 * Treat 24-hour disconnects as expected.
 * Prefer a fixed combined-stream URL or a tightly controlled subscription pattern.
 * Split connections if stream count or message volume requires it.
+* Live validation on 2026-04-30 showed that the symbol portion of stream names should be lowercase, but stream suffixes such as `aggTrade`, `bookTicker`, and `markPrice@1s` must retain their documented casing. Fully lowercased variants like `aggtrade` and `bookticker` timed out in direct probes.
 
 ---
 
@@ -210,6 +211,10 @@ Recommended implementation split:
 
 * Capture non-depth market streams first.
 * Add snapshots and depth streams only after the general market-stream path is stable.
+
+Validation note:
+
+* A bounded live capture run through the repo's `capture-aster` command succeeded on 2026-04-30 for non-depth market streams and produced valid raw files under the canonical Aster path layout.
 
 ---
 

@@ -103,13 +103,13 @@ Refs: `e0dce93`; `docs/phases/raw-recorder/phase3.md`; `docs/reference/providers
 
 ### Phase 4 — Aster market stream capture
 
-Status: planned
+Status: implemented
 
-Description: Aster trade, ticker, mark-price, liquidation, and baseline market stream capture is planned after the recorder core and storage layers exist.
+Description: The repo now has an Aster non-depth combined-stream adapter, bounded CLI capture command, config-driven stream-target construction, and validated raw output for live Aster market events.
 
-Notes: Source integrations should remain config-driven, connection-aware, and independent at ingest while reusing the runtime, storage, and validation patterns already proven by the Pyth path.
+Notes: Live validation confirmed that the symbol portion of stream names must be lowercase while suffixes like `aggTrade`, `bookTicker`, and `markPrice@1s` retain their documented case. `forceOrder` remains activity-dependent, so bounded live validation cannot guarantee an emitted liquidation event on every run.
 
-Refs: `e0dce93`; `docs/phases/raw-recorder/phase4.md`; `docs/reference/providers/aster.md`
+Refs: `5874f41`; `docs/phases/raw-recorder/phase4.md`; `docs/reference/providers/aster.md`; `src/market_recorder/sources/aster.py`
 
 ### Phase 5 — Aster snapshots and depth capture
 

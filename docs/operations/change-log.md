@@ -23,6 +23,7 @@ Use it to record implemented repo changes and meaningful documentation updates i
 
 ## 2026-04-30
 
+- `5874f41` — implemented the Phase 4 Aster non-depth capture path with combined-stream routing, bounded CLI capture validation, and corrected case-sensitive stream suffix handling based on live behavior.
 - `e0dce93` — implemented the Phase 3 Pyth source adapter with live Hermes SSE capture, reconnect-aware looping, and bounded CLI capture validation against the public endpoint.
 - `3bc71a4` — implemented the Phase 2 storage foundation with canonical raw-path generation, streaming `.jsonl.zst` writing, hourly rotation, sample output generation, and raw-file validation tooling.
 - `242d9aa` — implemented the Phase 1 runtime foundation with typed YAML config loading, raw-envelope helpers, aiohttp-managed lifecycle scaffolding, and CLI/runtime validation coverage.

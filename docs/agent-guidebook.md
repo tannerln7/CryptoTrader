@@ -134,7 +134,7 @@ reconnect on failure
 
 Raw recording should not calculate indicators, normalize away source fields, blend prices, run backtests, make trade decisions, or place orders.
 
-The repo is now structurally ready for the Phase 8 stability run and handoff, and the current live source paths plus operator surfaces have been proven with Pyth, Aster non-depth streams, Aster depth plus snapshot capture, local TradingView-compatible webhook delivery, unattended service execution, and runtime health plus quality reporting.
+The repo now has bounded Phase 8 handoff evidence, and the current live source paths plus operator surfaces have been proven with Pyth, Aster non-depth streams, Aster depth plus snapshot capture, local TradingView-compatible webhook delivery, unattended service execution, and runtime health plus quality reporting. The remaining raw-recorder gap is longer soak evidence rather than missing architecture.
 
 Use these references for implementation details:
 
@@ -144,6 +144,7 @@ docs/reference/data-layout.md
 docs/reference/providers/pyth.md
 docs/reference/providers/aster.md
 docs/reference/providers/tradingview.md
+docs/decisions/raw-recorder-normalization-handoff.md
 ```
 
 ---

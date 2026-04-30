@@ -14,7 +14,7 @@ The repo now includes the Phase 0 scaffold, the Phase 1 runtime-contract foundat
 - Phase 5 Aster snapshots and depth capture: implemented
 - Phase 6 TradingView alert and label capture: implemented
 - Phase 7 operational hardening and unattended runtime: implemented
-- Next implementation phase: stability run and normalization handoff
+- Phase 8 stability run and normalization handoff: in progress (bounded soak complete; longer soak still pending)
 
 ## Repo Defaults
 
@@ -166,4 +166,4 @@ The repo currently provides:
 - a `report-data-quality` command that validates the newest raw file on each expected route and distinguishes optional event-driven routes from real failures
 - focused unit coverage for config loading, envelope helpers, runtime lifecycle, CLI behavior, time helpers, storage pathing, writer rotation, and raw validation
 
-The repo can now generate and validate sample raw files locally, capture bounded live Pyth events, capture bounded live Aster non-depth events, capture bounded live Aster depth plus snapshot data, receive bounded TradingView-compatible webhook alerts, run the enabled sources together as a supervised service, and emit operator-facing health and quality signals. The stabilization handoff is the remaining raw-recorder phase.
+The repo can now generate and validate sample raw files locally, capture bounded live Pyth events, capture bounded live Aster non-depth events, capture bounded live Aster depth plus snapshot data, receive bounded TradingView-compatible webhook alerts, run the enabled sources together as a supervised service, and emit operator-facing health and quality signals. A bounded Phase 8 soak and normalization handoff note now exist in `docs/decisions/raw-recorder-normalization-handoff.md`, while the longer 24-to-48 hour soak target remains pending.

@@ -143,10 +143,10 @@ Refs: `20b70dd`; `docs/phases/raw-recorder/phase7.md`; `docs/operations/deployme
 
 ### Phase 8 — Stability run and normalization handoff
 
-Status: planned
+Status: in-progress
 
-Description: A stabilization and handoff phase is planned before normalization work begins.
+Description: Bounded stability evidence, stale-note cleanup, and a normalization handoff note are now in place before downstream normalization work begins.
 
-Notes: This is now the next implementation phase. It should confirm source behavior, storage growth, validation results, and known limitations after a longer soak run.
+Notes: A 180-second bounded soak run on 2026-04-30 completed with `pyth`, `aster.market`, and `aster.depth` all reporting `completed`, and the follow-up route-quality report showed 19 OK routes, 0 missing routes, 0 stale routes, and 0 invalid routes, with only the activity-driven `forceOrder` routes marked optional-missing. The remaining gap is the longer 24-to-48 hour soak target documented in the normalization handoff note.
 
-Refs: `4a88c06`; `docs/phases/raw-recorder/phase8.md`
+Refs: `13b3a6c`; `docs/phases/raw-recorder/phase8.md`; `docs/decisions/raw-recorder-normalization-handoff.md`

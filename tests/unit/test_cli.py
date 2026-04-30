@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from market_recorder.cli import main
+from market_recorder.storage import validate_raw_file
 
 
 def test_cli_validate_config_reports_loaded_paths(capsys) -> None:
@@ -53,6 +54,7 @@ logging:
 storage:
   format: jsonl.zst
   rotation: hourly
+  compression_level: 3
 validation:
   enable_sample_checks: true
 """.strip(),
@@ -64,3 +66,36 @@ validation:
 
     assert exit_code == 2
     assert "Configuration error:" in captured.err
+
+
+def test_cli_write_sample_creates_valid_raw_file(tmp_path: Path, capsys) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f"""
+runtime:
+  environment: development
+  timezone: UTC
+  data_root: {tmp_path / 'data'}
+  sources_config: {Path('config/sources.example.yaml').resolve()}
+logging:
+  level: INFO
+  structured: false
+storage:
+  format: jsonl.zst
+  rotation: hourly
+  compression_level: 3
+validation:
+  enable_sample_checks: true
+""".strip(),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["write-sample", "--config", str(config_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Sample raw file:" in captured.out
+
+    raw_path = Path(captured.out.splitlines()[0].split(": ", 1)[1])
+    summary = validate_raw_file(raw_path)
+    assert summary.record_count == 2

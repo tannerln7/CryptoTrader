@@ -14,6 +14,7 @@ logging:
 storage:
   format: jsonl.zst
   rotation: hourly
+  compression_level: 3
 
 validation:
   enable_sample_checks: true

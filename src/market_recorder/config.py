@@ -70,6 +70,7 @@ class LoggingConfig:
 class StorageConfig:
 	format: str
 	rotation: str
+	compression_level: int
 
 	@classmethod
 	def from_mapping(cls, mapping: Mapping[str, Any]) -> "StorageConfig":
@@ -84,7 +85,16 @@ class StorageConfig:
 			raise ConfigError(
 				f"storage.rotation must be one of {sorted(_SUPPORTED_ROTATIONS)}, got {rotation!r}",
 			)
-		return cls(format=storage_format, rotation=rotation)
+
+		compression_level = _require_int(mapping, "compression_level", "storage")
+		if compression_level <= 0:
+			raise ConfigError("storage.compression_level must be a positive integer")
+
+		return cls(
+			format=storage_format,
+			rotation=rotation,
+			compression_level=compression_level,
+		)
 
 
 @dataclass(frozen=True, slots=True)

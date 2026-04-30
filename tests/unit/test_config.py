@@ -19,6 +19,7 @@ def test_load_config_reads_example_files() -> None:
     assert config.sources_path == DEFAULT_SOURCES_PATH
     assert config.runtime.timezone == "UTC"
     assert config.storage.format == "jsonl.zst"
+    assert config.storage.compression_level == 3
     assert config.enabled_sources == ("pyth", "aster")
 
 
@@ -61,6 +62,7 @@ logging:
 storage:
   format: jsonl.zst
   rotation: hourly
+  compression_level: 3
 validation:
   enable_sample_checks: true
 """.strip(),

@@ -13,7 +13,9 @@ from .alerts import TradingViewWebhookSummary, serve_tradingview_webhook
 from .config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 from .contracts import build_market_event
 from .logging import configure_logging, get_logger
+from .quality import DataQualityReport, build_data_quality_report
 from .runtime import RecorderRuntime
+from .service import RecorderServiceSummary, run_recorder_service
 from .sources.aster import AsterCaptureSummary, capture_aster
 from .sources.aster_depth import AsterDepthCaptureSummary, capture_aster_depth
 from .sources.pyth import PythCaptureSummary, capture_pyth
@@ -72,6 +74,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Initialize the runtime skeleton and exit after startup checks.",
     )
     _add_config_arguments(run_parser)
+
+    run_service_parser = subparsers.add_parser(
+        "run-service",
+        help="Run the enabled recorder components as a bounded or long-lived service.",
+    )
+    _add_config_arguments(run_service_parser)
+    run_service_parser.add_argument(
+        "--duration-seconds",
+        type=float,
+        default=None,
+        help="Optional maximum runtime for the unattended recorder service.",
+    )
+    run_service_parser.add_argument(
+        "--health-interval-seconds",
+        type=float,
+        default=10.0,
+        help="Interval for writing the runtime health manifest.",
+    )
+    run_service_parser.add_argument(
+        "--health-path",
+        default=None,
+        help="Optional override path for the runtime health manifest JSON file.",
+    )
 
     capture_pyth_parser = subparsers.add_parser(
         "capture-pyth",
@@ -166,6 +191,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Validate an existing raw .jsonl.zst file.",
     )
     validate_raw_parser.add_argument("path", help="Path to the raw .jsonl.zst file to inspect.")
+
+    report_quality_parser = subparsers.add_parser(
+        "report-data-quality",
+        help="Report missing, stale, or invalid raw routes for the current config.",
+    )
+    _add_config_arguments(report_quality_parser)
+    report_quality_parser.add_argument(
+        "--stale-after-seconds",
+        type=float,
+        default=900.0,
+        help="Maximum acceptable age for the newest raw file on each expected route.",
+    )
     return parser
 
 
@@ -207,6 +244,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if command == "serve-tradingview":
         configure_logging(config.logging.level, structured=config.logging.structured)
         return asyncio.run(_serve_tradingview_command(config, args))
+    if command == "run-service":
+        configure_logging(config.logging.level, structured=config.logging.structured)
+        return asyncio.run(_run_service_command(config, args))
+    if command == "report-data-quality":
+        report = build_data_quality_report(config, stale_after_seconds=args.stale_after_seconds)
+        print(_format_data_quality_report(report))
+        return 0 if _is_quality_report_clean(report) else 1
 
     configure_logging(config.logging.level, structured=config.logging.structured)
     return asyncio.run(_run_runtime_check(config))
@@ -299,6 +343,46 @@ def _format_tradingview_summary(summary: TradingViewWebhookSummary) -> str:
     ]
     for path in summary.output_paths:
         lines.append(f"Output path: {path}")
+    return "\n".join(lines)
+
+
+def _format_service_summary(summary: RecorderServiceSummary) -> str:
+    lines = [
+        "Recorder service run complete",
+        f"Run ID: {summary.run_id}",
+        f"Started: {summary.started_at_utc}",
+        f"Finished: {summary.finished_at_utc}",
+        f"Health manifest: {summary.health_path}",
+    ]
+    for component_name, status in sorted(summary.component_statuses.items()):
+        lines.append(f"Component {component_name}: {status}")
+    for component_name, observation in sorted(summary.component_outputs.items()):
+        lines.append(
+            f"Output {component_name}: {observation.file_count} file(s), latest={observation.latest_output_utc}",
+        )
+    return "\n".join(lines)
+
+
+def _format_data_quality_report(report: DataQualityReport) -> str:
+    lines = [
+        "Data quality report",
+        f"Checked routes: {report.checked_route_count}",
+        f"OK routes: {report.ok_route_count}",
+        f"Missing routes: {report.missing_route_count}",
+        f"Stale routes: {report.stale_route_count}",
+        f"Invalid routes: {report.invalid_route_count}",
+    ]
+    for route in report.routes:
+        line = f"Route {route.route}: {route.status}"
+        if not route.required:
+            line += ", optional"
+        if route.latest_output_utc is not None:
+            line += f", latest={route.latest_output_utc}"
+        if route.record_count is not None:
+            line += f", records={route.record_count}"
+        if route.message:
+            line += f", note={route.message}"
+        lines.append(line)
     return "\n".join(lines)
 
 
@@ -398,6 +482,21 @@ async def _serve_tradingview_command(config, args: argparse.Namespace) -> int:
     return 0
 
 
+async def _run_service_command(config, args: argparse.Namespace) -> int:
+    runtime = RecorderRuntime.from_config(config)
+    try:
+        summary = await run_recorder_service(
+            runtime=runtime,
+            duration_seconds=args.duration_seconds,
+            health_interval_seconds=args.health_interval_seconds,
+            health_path=Path(args.health_path) if args.health_path else None,
+        )
+    finally:
+        await runtime.close()
+    print(_format_service_summary(summary))
+    return 0
+
+
 def _add_config_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--config",
@@ -409,6 +508,10 @@ def _add_config_arguments(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Optional override path to the sources config file.",
     )
+
+
+def _is_quality_report_clean(report: DataQualityReport) -> bool:
+    return report.missing_route_count == 0 and report.stale_route_count == 0 and report.invalid_route_count == 0
 
 
 if __name__ == "__main__":

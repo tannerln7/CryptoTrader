@@ -13,7 +13,7 @@ Use it to document what operators should watch, how health is assessed, what fai
 
 ## Current State
 
-Monitoring guidance is not yet established. Add concrete health checks and operator procedures once the repo has runnable services or validation jobs.
+The repo now has a runtime health manifest and a route-aware raw data quality report.
 
 ## Section Template
 
@@ -32,3 +32,17 @@ Response Notes: Initial operator actions or escalation guidance.
 
 Refs: Relevant docs, scripts, configs, or commit refs.
 ```
+
+## Recorder service
+
+Status: implemented
+
+Signals: `data/manifests/runtime/health-<run_id>.json`; stdout logs from `market-recorder run-service`; newest raw file timestamps under the expected source routes; `market-recorder report-data-quality` exit status and per-route summaries.
+
+Checks: Confirm the health manifest exists and its `component_statuses` show the enabled components. For bounded runs, expect `completed`. For active runs, expect `running`. Run `market-recorder report-data-quality --stale-after-seconds 600` to validate the newest file on each expected route.
+
+Failure Indicators: Missing required routes; stale routes; invalid raw files; a missing or stale health manifest; component statuses marked `failed`; repeated recorder-error raw files for the same route; no new raw files for a source that normally emits continuously.
+
+Response Notes: Re-run `market-recorder validate-config`, check network reachability to the affected provider, inspect the newest `raw.recorder_error.v1` files for that source, and restart the bounded service run. Treat `forceOrder` and idle TradingView alert routes as optional unless the workload specifically expects them.
+
+Refs: `20b70dd`; `docs/operations/deployment.md`; `docs/phases/raw-recorder/phase7.md`

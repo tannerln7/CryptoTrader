@@ -13,7 +13,7 @@ Use it for durable operator-facing implementation notes such as service units, r
 
 ## Current State
 
-Deployment guidance is not yet established. Add concrete instructions once the repo has runnable services or jobs.
+The repo now has a runnable unattended service entrypoint through `market-recorder run-service`.
 
 ## Section Template
 
@@ -34,3 +34,19 @@ Notes: Caveats, rollback notes, or operational assumptions.
 
 Refs: Relevant docs, scripts, configs, or commit refs.
 ```
+
+## Recorder service
+
+Status: implemented
+
+Purpose: Run the enabled live recorder components together with a shared runtime, periodic health-manifest updates, and predictable shutdown behavior.
+
+Prerequisites: Repo-local `.venv`; installed package and dependencies; a writable data root; network access for the enabled market-data sources; local webhook exposure only if `tradingview.enabled` is true.
+
+Procedure: Activate `.venv`, verify `market-recorder validate-config`, then start the service with `market-recorder run-service --health-interval-seconds 10`. Add `--duration-seconds <n>` for bounded smoke or soak runs.
+
+Validation: Confirm the service prints a `Health manifest:` path on exit for bounded runs. During an active run, inspect `data/manifests/runtime/health-<run_id>.json` and confirm the expected components are `running` or `completed`. Follow with `market-recorder report-data-quality --stale-after-seconds 600`.
+
+Notes: The default example config currently enables Pyth and Aster, and leaves TradingView disabled. If TradingView is enabled, deploy it behind a reverse proxy or tunnel that exposes an accepted public port instead of assuming direct public binding from a development workstation.
+
+Refs: `20b70dd`; `docs/operations/monitoring.md`; `docs/phases/raw-recorder/phase7.md`

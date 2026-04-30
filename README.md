@@ -2,7 +2,7 @@
 
 This repository is a long-lived market-data and trading-research workspace.
 
-The repo now includes the Phase 0 scaffold, the Phase 1 runtime-contract foundation, the Phase 2 storage and validation foundation, the Phase 3 live Pyth capture path, the Phase 4 Aster non-depth market capture path, the Phase 5 Aster depth and snapshot capture path, and the Phase 6 TradingView webhook capture path.
+The repo now includes the Phase 0 scaffold, the Phase 1 runtime-contract foundation, the Phase 2 storage and validation foundation, the Phase 3 live Pyth capture path, the Phase 4 Aster non-depth market capture path, the Phase 5 Aster depth and snapshot capture path, the Phase 6 TradingView webhook capture path, and the Phase 7 unattended runtime and monitoring surface.
 
 ## Current Status
 
@@ -13,7 +13,8 @@ The repo now includes the Phase 0 scaffold, the Phase 1 runtime-contract foundat
 - Phase 4 Aster non-depth market stream capture: implemented
 - Phase 5 Aster snapshots and depth capture: implemented
 - Phase 6 TradingView alert and label capture: implemented
-- Next implementation phase: operational hardening and unattended runtime
+- Phase 7 operational hardening and unattended runtime: implemented
+- Next implementation phase: stability run and normalization handoff
 
 ## Repo Defaults
 
@@ -100,6 +101,18 @@ Serve the TradingView webhook receiver for local testing:
 market-recorder serve-tradingview --bind-host 127.0.0.1 --bind-port 18080 --path /webhook/test --request-limit 2 --duration-seconds 20
 ```
 
+Run the enabled recorder components as a bounded unattended service:
+
+```bash
+market-recorder run-service --duration-seconds 20 --health-interval-seconds 2
+```
+
+Run the route-aware raw data quality report:
+
+```bash
+market-recorder report-data-quality --stale-after-seconds 600
+```
+
 ## Canonical Layout
 
 Important paths:
@@ -132,7 +145,7 @@ These files are safe examples only. Do not commit real secrets or private endpoi
 - Keep `data/` local and untracked except for committed placeholders.
 - Update the relevant docs when behavior, structure, or assumptions change.
 
-## Implemented Through Phase 6
+## Implemented Through Phase 7
 
 The repo currently provides:
 
@@ -149,6 +162,8 @@ The repo currently provides:
 - a live Aster depth capture command that writes periodic REST depth snapshots plus partial-depth and diff-depth WebSocket streams
 - diff-depth continuity checks that emit restart-required recorder errors when `pu` continuity breaks
 - a TradingView webhook receiver that writes raw alert events and intentionally preserves both JSON and plain-text request bodies
+- an unattended `run-service` supervisor that starts the enabled recorder components together and writes a runtime health manifest
+- a `report-data-quality` command that validates the newest raw file on each expected route and distinguishes optional event-driven routes from real failures
 - focused unit coverage for config loading, envelope helpers, runtime lifecycle, CLI behavior, time helpers, storage pathing, writer rotation, and raw validation
 
-The repo can now generate and validate sample raw files locally, capture bounded live Pyth events, capture bounded live Aster non-depth events, capture bounded live Aster depth plus snapshot data, and receive bounded TradingView-compatible webhook alerts. Unattended runtime hardening and the stabilization handoff are still pending.
+The repo can now generate and validate sample raw files locally, capture bounded live Pyth events, capture bounded live Aster non-depth events, capture bounded live Aster depth plus snapshot data, receive bounded TradingView-compatible webhook alerts, run the enabled sources together as a supervised service, and emit operator-facing health and quality signals. The stabilization handoff is the remaining raw-recorder phase.

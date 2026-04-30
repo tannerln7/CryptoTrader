@@ -57,6 +57,14 @@ Do not commit real market data.
 | `logs/`       | Runtime logs                                    |                       no |
 | `tmp/`        | Temporary working files                         |                       no |
 
+Current operational manifest paths:
+
+```text
+manifests/runtime/health-<run_id>.json
+```
+
+Use runtime manifests for lightweight service-health state and operator-facing summaries that should not be mixed into raw event files.
+
 ---
 
 ## Raw Data Layout

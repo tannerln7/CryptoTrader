@@ -133,13 +133,13 @@ Refs: `2eaf53a`; `docs/phases/raw-recorder/phase6.md`; `docs/reference/providers
 
 ### Phase 7 — Operational hardening and unattended runtime
 
-Status: planned
+Status: implemented
 
-Description: Service management, health visibility, reconnect resilience, and data-quality checks are planned after the raw capture path is functional.
+Description: The repo now has an unattended service runner, a runtime health-manifest writer, and a route-aware raw data quality report for the enabled sources.
 
-Notes: Favor lightweight observability and clear operator signals before adding heavier infrastructure. This is now the next implementation phase after the TradingView webhook receiver.
+Notes: The current implementation keeps hardening lightweight: `run-service` supervises the enabled components, writes `manifests/runtime/health-<run_id>.json`, and `report-data-quality` validates the newest raw file per expected route while treating `forceOrder` and TradingView alerts as optional event-driven paths.
 
-Refs: `4a88c06`; `docs/phases/raw-recorder/phase7.md`
+Refs: `20b70dd`; `docs/phases/raw-recorder/phase7.md`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `src/market_recorder/service.py`; `src/market_recorder/quality.py`
 
 ### Phase 8 — Stability run and normalization handoff
 
@@ -147,6 +147,6 @@ Status: planned
 
 Description: A stabilization and handoff phase is planned before normalization work begins.
 
-Notes: This phase should confirm source behavior, storage growth, validation results, and known limitations.
+Notes: This is now the next implementation phase. It should confirm source behavior, storage growth, validation results, and known limitations after a longer soak run.
 
 Refs: `4a88c06`; `docs/phases/raw-recorder/phase8.md`

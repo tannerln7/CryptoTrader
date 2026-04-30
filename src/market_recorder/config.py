@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -9,8 +10,8 @@ from typing import Any
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-CONFIG_DIR = REPO_ROOT / "config"
+REPO_ROOT = Path.cwd().resolve()
+CONFIG_DIR = Path("config")
 DEFAULT_CONFIG_PATH = CONFIG_DIR / "config.example.yaml"
 DEFAULT_SOURCES_PATH = CONFIG_DIR / "sources.example.yaml"
 
@@ -455,22 +456,26 @@ class RecorderConfig:
 
 
 def load_config(
-	config_path: str | Path = DEFAULT_CONFIG_PATH,
+	config_path: str | Path | None = None,
 	*,
 	sources_path: str | Path | None = None,
-	repo_root: Path = REPO_ROOT,
+	repo_root: Path | None = None,
 ) -> RecorderConfig:
 	"""Load and validate the runtime and source configuration files."""
 
-	resolved_config_path = _resolve_repo_path(config_path, repo_root)
+	resolved_repo_root = _resolve_repo_root(repo_root, config_path)
+	resolved_config_path = _resolve_repo_path(config_path or DEFAULT_CONFIG_PATH, resolved_repo_root)
 	config_mapping = _load_yaml_mapping(resolved_config_path, "runtime config")
 
-	runtime = RuntimeConfig.from_mapping(_require_section(config_mapping, "runtime", "config"), repo_root=repo_root)
+	runtime = RuntimeConfig.from_mapping(
+		_require_section(config_mapping, "runtime", "config"),
+		repo_root=resolved_repo_root,
+	)
 	logging_config = LoggingConfig.from_mapping(_require_section(config_mapping, "logging", "config"))
 	storage = StorageConfig.from_mapping(_require_section(config_mapping, "storage", "config"))
 	validation = ValidationConfig.from_mapping(_require_section(config_mapping, "validation", "config"))
 
-	resolved_sources_path = _resolve_repo_path(sources_path or runtime.sources_config, repo_root)
+	resolved_sources_path = _resolve_repo_path(sources_path or runtime.sources_config, resolved_repo_root)
 	sources_mapping = _load_yaml_mapping(resolved_sources_path, "sources config")
 	sources = SourcesConfig.from_mapping(sources_mapping)
 
@@ -482,7 +487,7 @@ def load_config(
 		sources=sources,
 		config_path=resolved_config_path,
 		sources_path=resolved_sources_path,
-		repo_root=repo_root,
+		repo_root=resolved_repo_root,
 	)
 
 
@@ -531,6 +536,27 @@ def _load_yaml_mapping(path: Path, label: str) -> dict[str, Any]:
 	if not isinstance(loaded, Mapping):
 		raise ConfigError(f"{label} file must contain a top-level mapping: {path}")
 	return dict(loaded)
+
+
+def _resolve_repo_root(repo_root: Path | None, config_path: str | Path | None) -> Path:
+	if repo_root is not None:
+		return Path(repo_root).resolve()
+
+	env_repo_root = os.environ.get("MARKET_RECORDER_REPO_ROOT")
+	if env_repo_root:
+		return Path(env_repo_root).resolve()
+
+	search_start = Path.cwd().resolve()
+	if config_path is not None:
+		candidate_path = Path(config_path)
+		if candidate_path.is_absolute():
+			search_start = candidate_path.resolve().parent
+
+	for candidate in (search_start, *search_start.parents):
+		if (candidate / "pyproject.toml").is_file() and (candidate / DEFAULT_CONFIG_PATH).is_file():
+			return candidate.resolve()
+
+	return search_start
 
 
 def _resolve_repo_path(value: str | Path, repo_root: Path) -> Path:

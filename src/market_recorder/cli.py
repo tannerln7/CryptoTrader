@@ -12,7 +12,6 @@ from typing import Any
 from . import __version__
 from .alerts import TradingViewWebhookSummary, serve_tradingview_webhook
 from .config import (
-    DEFAULT_CONFIG_PATH,
     ConfigError,
     apply_runtime_overrides,
     load_config,
@@ -282,7 +281,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _restart_command(args.instance)
 
     try:
-        config = load_config(args.config or DEFAULT_CONFIG_PATH, sources_path=args.sources)
+        config = load_config(args.config, sources_path=args.sources)
         config = apply_runtime_overrides(
             config,
             data_root=args.data_root,

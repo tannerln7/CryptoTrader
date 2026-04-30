@@ -15,14 +15,75 @@ from market_recorder.config import (
 def test_load_config_reads_example_files() -> None:
     config = load_config()
 
-    assert config.config_path == DEFAULT_CONFIG_PATH
-    assert config.sources_path == DEFAULT_SOURCES_PATH
+    assert config.config_path == (config.repo_root / DEFAULT_CONFIG_PATH).resolve()
+    assert config.sources_path == (config.repo_root / DEFAULT_SOURCES_PATH).resolve()
     assert config.runtime.timezone == "UTC"
     assert config.storage.format == "jsonl.zst"
     assert config.storage.compression_level == 3
     assert config.sources.aster.depth.snapshot_limit == 1000
     assert config.sources.aster.depth.snapshot_interval_seconds == 300
     assert config.enabled_sources == ("pyth", "aster")
+
+
+def test_load_config_infers_repo_root_from_absolute_config_path(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "pyproject.toml").write_text("[build-system]\nrequires = []\n", encoding="utf-8")
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "config.example.yaml").write_text("runtime: {}\n", encoding="utf-8")
+    sources_path = config_dir / "sources.example.yaml"
+    sources_path.write_text(
+        """
+pyth:
+  enabled: false
+  provider: hermes
+  http_base_url: https://hermes.pyth.network
+  feeds: []
+aster:
+  enabled: false
+  rest_base_url: https://fapi.asterdex.com
+  ws_base_url: wss://fstream.asterdex.com
+  symbols: []
+  streams: []
+tradingview:
+  enabled: false
+  webhook:
+    bind_host: 127.0.0.1
+    bind_port: 8000
+    path: /webhook/tradingview
+""".strip(),
+        encoding="utf-8",
+    )
+
+    instance_config_dir = tmp_path / "data" / "systemd" / "main"
+    instance_config_dir.mkdir(parents=True)
+    config_path = instance_config_dir / "config.yaml"
+    config_path.write_text(
+        """
+runtime:
+  environment: development
+  timezone: UTC
+  data_root: ./data
+  sources_config: config/sources.example.yaml
+logging:
+  level: INFO
+  structured: false
+storage:
+  format: jsonl.zst
+  rotation: hourly
+  compression_level: 3
+validation:
+  enable_sample_checks: true
+""".strip(),
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path / "data")
+
+    config = load_config(config_path)
+
+    assert config.repo_root == tmp_path.resolve()
+    assert config.config_path == config_path.resolve()
+    assert config.sources_path == sources_path.resolve()
 
 
 def test_load_config_defaults_aster_depth_settings_when_missing(tmp_path: Path) -> None:

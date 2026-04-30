@@ -112,7 +112,7 @@ Current implemented foundation:
 * `src/market_recorder/contracts.py` defines the raw-envelope helpers aligned with `docs/reference/schemas.md`.
 * `src/market_recorder/timeutil.py` and `src/market_recorder/logging.py` provide UTC timestamp, run-id, and logging conventions.
 * `src/market_recorder/runtime.py` provides the aiohttp cleanup-context runtime container and shared client session used by later phases.
-* `src/market_recorder/storage/` now provides canonical raw-path generation, a streaming `.jsonl.zst` writer, and a streaming raw-file validator.
+* `src/market_recorder/storage/` now provides canonical per-stream raw-path generation, an active/sealed segment writer, and a sealed-file-first raw validator.
 * `src/market_recorder/sources/pyth.py` provides the first live source adapter, including Hermes SSE payload parsing and reconnect-aware capture.
 * `src/market_recorder/sources/aster.py` provides the non-depth combined-stream capture path for Aster market data.
 * `src/market_recorder/sources/aster_depth.py` provides periodic REST depth snapshots plus partial-depth and diff-depth capture, including restart-required continuity checks when diff-depth `pu` no longer matches the prior `u`.
@@ -131,14 +131,24 @@ connect
 receive events
 timestamp locally
 wrap with metadata
-write compressed raw records
-rotate files
+write route-local active `.jsonl.zst.open` segments
+seal segments atomically into `.jsonl.zst` files
+rotate by per-route age/size policy
 reconnect on failure
 ```
 
 Raw recording should not calculate indicators, normalize away source fields, blend prices, run backtests, make trade decisions, or place orders.
 
 The repo now has bounded Phase 8 handoff evidence, and the current live source paths plus operator surfaces have been proven with Pyth, Aster non-depth streams, Aster depth plus snapshot capture, local TradingView-compatible webhook delivery, repo-scoped background service control, systemd-compatible foreground supervision, and runtime health plus quality reporting. The remaining raw-recorder gap is longer soak evidence rather than missing architecture.
+
+Current raw-segment rules:
+
+* Keep the existing per-stream route layout: `raw/<source>/<transport>/<source_symbol>/<stream>/date=YYYY-MM-DD/hour=HH/...`.
+* Do not combine routes into a master raw file.
+* Writers own active `.jsonl.zst.open` segments.
+* Readers and validators treat sealed `.jsonl.zst` files as authoritative by default.
+* Rotation policy is resolved before writer construction from the route's source and logical stream name.
+* The parsed `manual_rotation` config is reserved for a future service-owned checkpoint flow and is not yet exposed as an operator command.
 
 Use these references for implementation details:
 
@@ -259,6 +269,7 @@ Aster source symbols
 stream names
 snapshot intervals
 compression settings
+rotation classes and stream-policy mappings
 reconnect delays
 webhook bind/port/path
 ```

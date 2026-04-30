@@ -85,11 +85,11 @@ Refs: `242d9aa`; `docs/phases/raw-recorder/phase1.md`; `src/market_recorder/runt
 
 Status: implemented
 
-Description: The repo now has canonical raw-path generation, a streaming Zstandard JSONL writer with hourly rotation, raw-file validation utilities, and CLI sample-write and validate-raw commands for local proof of output.
+Description: The repo now has canonical per-stream raw-path generation, a streaming Zstandard JSONL writer with active/sealed segment lifecycle, route-resolved age and size rotation, and sealed-file validation utilities.
 
-Notes: The storage layer currently targets append-only `part-<run_id>.jsonl.zst` files and validates records in a streaming fashion. Phase 3 should plug live Pyth events into this existing path instead of redesigning storage.
+Notes: Writers now own active `.jsonl.zst.open` files and atomically seal them into `.jsonl.zst` files on time or size rotation and on clean close. The route layout stays `raw/<source>/<transport>/<source_symbol>/<stream>/date=YYYY-MM-DD/hour=HH/...`; only the segment filename and lifecycle changed. `segment_start_utc` is the bucket start used for partitioning and active naming, `segment_end_utc` is the actual seal time used in sealed naming, and record-content timing remains available via `first_record_ts_recv_utc` and `last_record_ts_recv_utc` in writer seal metadata. The parsed `manual_rotation` config is reserved for a future service-owned checkpoint flow and is not yet exposed as an operator command.
 
-Refs: `3bc71a4`; `docs/phases/raw-recorder/phase2.md`; `src/market_recorder/storage/writer.py`; `src/market_recorder/storage/validate.py`
+Refs: `3bc71a4`; `0c3d0e6`; `docs/phases/raw-recorder/phase2.md`; `docs/reference/data-layout.md`; `config/config.example.yaml`; `src/market_recorder/storage/writer.py`; `src/market_recorder/storage/validate.py`
 
 ### Phase 3 — Pyth reference stream capture
 
@@ -137,9 +137,9 @@ Status: implemented
 
 Description: The repo now has an unattended service runner, a runtime health-manifest writer, and a route-aware raw data quality report for the enabled sources.
 
-Notes: The current implementation keeps hardening lightweight: `run-service` supervises the enabled components, writes `manifests/runtime/health-<run_id>.json`, and `report-data-quality` validates the newest raw file per expected route while treating `forceOrder` and TradingView alerts as optional event-driven paths. In bounded validation runs, the active hour file should be considered authoritative after graceful shutdown finalizes it; running `report-data-quality` or `validate-raw` against still-open files may report partial-write invalidity.
+Notes: The current implementation keeps hardening lightweight: `run-service` supervises the enabled components, writes `manifests/runtime/health-<run_id>.json`, and `report-data-quality` validates the newest sealed raw file per expected route while treating `forceOrder` and TradingView alerts as optional event-driven paths. Active `.open` segments are now reported separately as `incomplete-active` or `stale-active` candidates and are not treated as valid sealed data by default.
 
-Refs: `20b70dd`; `docs/phases/raw-recorder/phase7.md`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `src/market_recorder/service.py`; `src/market_recorder/quality.py`
+Refs: `20b70dd`; `0c3d0e6`; `docs/phases/raw-recorder/phase7.md`; `docs/operations/deployment.md`; `docs/operations/monitoring.md`; `src/market_recorder/service.py`; `src/market_recorder/quality.py`
 
 ### Recorder service control surface
 

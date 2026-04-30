@@ -74,7 +74,7 @@ Raw data is the source of truth and should be append-only.
 Canonical pattern:
 
 ```text
-raw/<source>/<transport>/<source_symbol>/<stream>/date=YYYY-MM-DD/hour=HH/part-*.jsonl.zst
+raw/<source>/<transport>/<source_symbol>/<stream>/date=YYYY-MM-DD/hour=HH/part-*.jsonl.zst*
 ```
 
 Path component note:
@@ -85,19 +85,22 @@ Path component note:
 Examples:
 
 ```text
-raw/pyth/sse/MULTI/price_stream/date=2026-04-30/hour=14/part-0000.jsonl.zst
+raw/pyth/sse/MULTI/price_stream/date=2026-04-30/hour=14/part-20260430T140000Z-recorder-abc123.jsonl.zst.open
+raw/pyth/sse/MULTI/price_stream/date=2026-04-30/hour=14/part-20260430T140000Z-20260430T150000123456Z-recorder-abc123.jsonl.zst
 
-raw/aster/ws/BTCUSDT/aggTrade/date=2026-04-30/hour=14/part-0000.jsonl.zst
-raw/aster/ws/BTCUSDT/bookTicker/date=2026-04-30/hour=14/part-0000.jsonl.zst
-raw/aster/ws/BTCUSDT/markPrice_1s/date=2026-04-30/hour=14/part-0000.jsonl.zst
-raw/aster/ws/BTCUSDT/forceOrder/date=2026-04-30/hour=14/part-0000.jsonl.zst
-raw/aster/ws/BTCUSDT/kline_1m/date=2026-04-30/hour=14/part-0000.jsonl.zst
-raw/aster/ws/BTCUSDT/depth20_100ms/date=2026-04-30/hour=14/part-0000.jsonl.zst
-raw/aster/ws/BTCUSDT/depth_100ms/date=2026-04-30/hour=14/part-0000.jsonl.zst
+raw/aster/ws/BTCUSDT/aggTrade/date=2026-04-30/hour=14/part-20260430T140000Z-recorder-abc123.jsonl.zst.open
+raw/aster/ws/BTCUSDT/bookTicker/date=2026-04-30/hour=14/part-20260430T140000Z-20260430T150000Z-recorder-abc123.jsonl.zst
+raw/aster/ws/BTCUSDT/markPrice_1s/date=2026-04-30/hour=12/part-20260430T120000Z-20260430T180000Z-recorder-abc123.jsonl.zst
+raw/aster/ws/BTCUSDT/forceOrder/date=2026-04-30/hour=00/part-20260430T000000Z-recorder-abc123.jsonl.zst.open
+raw/aster/ws/BTCUSDT/kline_1m/date=2026-04-30/hour=12/part-20260430T120000Z-recorder-abc123.jsonl.zst.open
+raw/aster/ws/BTCUSDT/kline_5m/date=2026-04-30/hour=12/part-20260430T120000Z-recorder-abc123.jsonl.zst.open
+raw/aster/ws/BTCUSDT/kline_15m/date=2026-04-30/hour=12/part-20260430T120000Z-recorder-abc123.jsonl.zst.open
+raw/aster/ws/BTCUSDT/depth20_100ms/date=2026-04-30/hour=14/part-20260430T140000Z-recorder-abc123.jsonl.zst.open
+raw/aster/ws/BTCUSDT/depth_100ms/date=2026-04-30/hour=14/part-20260430T140000Z-recorder-abc123.jsonl.zst.open
 
-raw/aster/rest/BTCUSDT/depth_snapshot_1000/date=2026-04-30/hour=14/part-0000.jsonl.zst
+raw/aster/rest/BTCUSDT/depth_snapshot_1000/date=2026-04-30/hour=00/part-20260430T000000Z-recorder-abc123.jsonl.zst.open
 
-raw/tradingview/webhook/ALL/alert/date=2026-04-30/hour=14/part-0000.jsonl.zst
+raw/tradingview/webhook/ALL/alert/date=2026-04-30/hour=00/part-20260430T000000Z-recorder-abc123.jsonl.zst.open
 ```
 
 ### Raw File Format
@@ -105,50 +108,71 @@ raw/tradingview/webhook/ALL/alert/date=2026-04-30/hour=14/part-0000.jsonl.zst
 Use:
 
 ```text
-.jsonl.zst
+.jsonl.zst.open   # active writer-owned segment
+.jsonl.zst        # sealed segment safe for validation and user reads
 ```
 
 Rules:
 
 * One JSON object per line.
 * Zstandard compression.
-* Rotate hourly.
+* Writers own active `.jsonl.zst.open` segments and never write directly to final-looking sealed files.
+* Sealing closes the zstd frame and atomically renames the active path to a sealed `.jsonl.zst` path.
+* Validators and user-facing inspection commands should treat sealed `.jsonl.zst` files as authoritative by default.
 * Append-only.
 * Do not mutate or rewrite raw files during normal operation.
 
 ### Raw File Rotation
 
-Default rotation:
+Rotation is now policy-driven per stream route.
 
 ```text
-hourly
+default rotation policy
+named rotation classes
+per-source/per-stream class mapping
+age-based rotation
+size-based rotation
+reserved manual checkpoint/seal constraints
 ```
+
+Current implementation:
+
+* Each route keeps its own independent segment series under the same per-stream directory layout as before.
+* `segment_start_utc` is the route-local bucket start used for directory partitioning and the active filename.
+* `segment_end_utc` is the actual seal time used in the sealed filename.
+* `first_record_ts_recv_utc` and `last_record_ts_recv_utc` are the first and last raw envelope receive timestamps written into the segment.
+* Age rotation is enforced by the configured `max_age_seconds` bucket for that route.
+* Size rotation is enforced by flushed compressed bytes in the active segment when `max_bytes` is configured.
+* Size rotation seals the segment after the record that crosses the limit; the next record opens a new active segment.
 
 Rationale:
 
 * Easy retention management.
-* Easy replay windows.
-* Avoids giant files.
-* Limits corruption scope.
+* Per-stream routes remain isolated and predictable.
+* Active and sealed states are unambiguous to writers and readers.
+* Larger retention windows are possible for lower-frequency routes without creating many tiny files.
+* Size caps limit segment growth on high-frequency routes.
 
 ### Raw Filename Policy
 
-Acceptable simple form:
+Active filename form:
 
 ```text
-part-0000.jsonl.zst
+part-<segment_start_utc>-<run_id>.jsonl.zst.open
 ```
 
-Current implemented default:
+Sealed filename form:
 
 ```text
-part-<run_id>.jsonl.zst
+part-<segment_start_utc>-<segment_end_utc>-<run_id>.jsonl.zst
 ```
 
-Rationale:
+Notes:
 
-* Avoids accidental overwrite across process restarts.
-* Keeps a single run's files easy to identify during validation.
+* `segment_start_utc` is compact UTC and is usually bucket-aligned, for example `20260430T140000Z`.
+* `segment_end_utc` uses compact UTC and may include subsecond digits when the actual seal time is not second-aligned, for example `20260430T150000123456Z`.
+* Run IDs remain part of the filename to prevent accidental overwrite across process restarts.
+* The per-stream directory layout does not change. This refactor only changes the segment filename and lifecycle within each existing route directory.
 
 Never overwrite an existing raw file unless explicitly instructed.
 
@@ -204,13 +228,9 @@ features/labels/symbol=BTCUSD/timeframe=5m/version=v1/year=2026/month=04/day=30/
 
 Feature outputs must include enough metadata to identify source dataset version and feature configuration.
 
----
-
 ## Replay Layout
 
 Replay data should be generated from raw/normalized data and should be reproducible.
-
-Examples:
 
 ```text
 replay/event_streams/source_set=aster_pyth/symbol=BTCUSD/date=2026-04-30/*.parquet

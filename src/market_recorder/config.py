@@ -16,7 +16,7 @@ DEFAULT_SOURCES_PATH = CONFIG_DIR / "sources.example.yaml"
 
 _VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 _SUPPORTED_STORAGE_FORMATS = frozenset({"jsonl.zst"})
-_SUPPORTED_ROTATIONS = frozenset({"hourly"})
+_SUPPORTED_LEGACY_ROTATIONS = frozenset({"hourly"})
 
 
 class ConfigError(ValueError):
@@ -67,9 +67,165 @@ class LoggingConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class RotationPolicyConfig:
+	max_age_seconds: int
+	max_bytes: int | None
+
+	@classmethod
+	def from_mapping(cls, mapping: Mapping[str, Any], *, location: str) -> "RotationPolicyConfig":
+		max_age_seconds = _require_int(mapping, "max_age_seconds", location)
+		if max_age_seconds <= 0:
+			raise ConfigError(f"{location}.max_age_seconds must be a positive integer")
+
+		max_bytes = _optional_int(mapping, "max_bytes", location)
+		if max_bytes is not None and max_bytes <= 0:
+			raise ConfigError(f"{location}.max_bytes must be a positive integer when provided")
+
+		return cls(max_age_seconds=max_age_seconds, max_bytes=max_bytes)
+
+	@classmethod
+	def hourly_default(cls) -> "RotationPolicyConfig":
+		return cls(max_age_seconds=3600, max_bytes=None)
+
+
+@dataclass(frozen=True, slots=True)
+class ManualRotationConfig:
+	enabled: bool
+	require_reason: bool
+	min_age_seconds: int
+	min_bytes: int
+	cooldown_seconds: int
+
+	@classmethod
+	def from_mapping(cls, mapping: Mapping[str, Any], *, location: str) -> "ManualRotationConfig":
+		enabled = _require_bool_with_default(mapping, "enabled", location, default=False)
+		require_reason = _require_bool_with_default(mapping, "require_reason", location, default=True)
+		min_age_seconds = _require_int_with_default(mapping, "min_age_seconds", location, default=300)
+		if min_age_seconds < 0:
+			raise ConfigError(f"{location}.min_age_seconds must be zero or a positive integer")
+		min_bytes = _require_int_with_default(mapping, "min_bytes", location, default=0)
+		if min_bytes < 0:
+			raise ConfigError(f"{location}.min_bytes must be zero or a positive integer")
+		cooldown_seconds = _require_int_with_default(mapping, "cooldown_seconds", location, default=300)
+		if cooldown_seconds < 0:
+			raise ConfigError(f"{location}.cooldown_seconds must be zero or a positive integer")
+		return cls(
+			enabled=enabled,
+			require_reason=require_reason,
+			min_age_seconds=min_age_seconds,
+			min_bytes=min_bytes,
+			cooldown_seconds=cooldown_seconds,
+		)
+
+	@classmethod
+	def defaults(cls) -> "ManualRotationConfig":
+		return cls(
+			enabled=False,
+			require_reason=True,
+			min_age_seconds=300,
+			min_bytes=0,
+			cooldown_seconds=300,
+		)
+
+
+@dataclass(frozen=True, slots=True)
+class StorageRotationConfig:
+	default: RotationPolicyConfig
+	classes: dict[str, RotationPolicyConfig]
+	stream_classes: dict[str, dict[str, str]]
+	manual_rotation: ManualRotationConfig
+	uses_legacy_hourly: bool = False
+
+	@classmethod
+	def from_value(cls, value: Any) -> "StorageRotationConfig":
+		if isinstance(value, str):
+			rotation_name = value.strip()
+			if rotation_name not in _SUPPORTED_LEGACY_ROTATIONS:
+				raise ConfigError(
+					f"storage.rotation must be one of {sorted(_SUPPORTED_LEGACY_ROTATIONS)} or a mapping, got {rotation_name!r}",
+				)
+			return cls(
+				default=RotationPolicyConfig.hourly_default(),
+				classes={},
+				stream_classes={},
+				manual_rotation=ManualRotationConfig.defaults(),
+				uses_legacy_hourly=True,
+			)
+
+		if not isinstance(value, Mapping):
+			raise ConfigError("storage.rotation must be either a string or a mapping")
+
+		default = RotationPolicyConfig.from_mapping(
+			_require_section(value, "default", "storage.rotation"),
+			location="storage.rotation.default",
+		)
+
+		class_section = _optional_section(value, "classes", "storage.rotation", default={})
+		classes: dict[str, RotationPolicyConfig] = {}
+		for raw_class_name, raw_policy in class_section.items():
+			if not isinstance(raw_class_name, str) or not raw_class_name.strip():
+				raise ConfigError("storage.rotation.classes keys must be non-empty strings")
+			class_name = raw_class_name.strip()
+			if not isinstance(raw_policy, Mapping):
+				raise ConfigError(f"storage.rotation.classes.{class_name} must be a mapping")
+			classes[class_name] = RotationPolicyConfig.from_mapping(
+				raw_policy,
+				location=f"storage.rotation.classes.{class_name}",
+			)
+
+		stream_class_section = _optional_section(value, "stream_classes", "storage.rotation", default={})
+		stream_classes: dict[str, dict[str, str]] = {}
+		for raw_source_name, raw_assignments in stream_class_section.items():
+			if not isinstance(raw_source_name, str) or not raw_source_name.strip():
+				raise ConfigError("storage.rotation.stream_classes keys must be non-empty strings")
+			source_name = raw_source_name.strip()
+			if not isinstance(raw_assignments, Mapping):
+				raise ConfigError(f"storage.rotation.stream_classes.{source_name} must be a mapping")
+			assignments: dict[str, str] = {}
+			for raw_stream_name, raw_class_name in raw_assignments.items():
+				if not isinstance(raw_stream_name, str) or not raw_stream_name.strip():
+					raise ConfigError(
+						f"storage.rotation.stream_classes.{source_name} keys must be non-empty strings",
+					)
+				if not isinstance(raw_class_name, str) or not raw_class_name.strip():
+					raise ConfigError(
+						f"storage.rotation.stream_classes.{source_name}.{raw_stream_name} must be a non-empty string",
+					)
+				assignments[raw_stream_name.strip()] = raw_class_name.strip()
+			stream_classes[source_name] = assignments
+
+		for source_name, assignments in stream_classes.items():
+			for stream_name, class_name in assignments.items():
+				if class_name not in classes:
+					raise ConfigError(
+						f"storage.rotation.stream_classes.{source_name}.{stream_name} references undefined rotation class {class_name!r}",
+					)
+
+		manual_rotation = ManualRotationConfig.from_mapping(
+			_optional_section(value, "manual_rotation", "storage.rotation", default={}),
+			location="storage.rotation.manual_rotation",
+		)
+
+		return cls(
+			default=default,
+			classes=classes,
+			stream_classes=stream_classes,
+			manual_rotation=manual_rotation,
+		)
+
+	def resolve_policy(self, *, source: str, stream: str) -> RotationPolicyConfig:
+		source_assignments = self.stream_classes.get(source, {})
+		for stream_key in (stream, _normalize_rotation_stream_key(stream)):
+			class_name = source_assignments.get(stream_key)
+			if class_name is not None:
+				return self.classes[class_name]
+		return self.default
+
+
+@dataclass(frozen=True, slots=True)
 class StorageConfig:
 	format: str
-	rotation: str
+	rotation: StorageRotationConfig
 	compression_level: int
 
 	@classmethod
@@ -80,11 +236,9 @@ class StorageConfig:
 				f"storage.format must be one of {sorted(_SUPPORTED_STORAGE_FORMATS)}, got {storage_format!r}",
 			)
 
-		rotation = _require_str(mapping, "rotation", "storage")
-		if rotation not in _SUPPORTED_ROTATIONS:
-			raise ConfigError(
-				f"storage.rotation must be one of {sorted(_SUPPORTED_ROTATIONS)}, got {rotation!r}",
-			)
+		if "rotation" not in mapping:
+			raise ConfigError("storage.rotation is required")
+		rotation = StorageRotationConfig.from_value(mapping["rotation"])
 
 		compression_level = _require_int(mapping, "compression_level", "storage")
 		if compression_level <= 0:
@@ -95,6 +249,9 @@ class StorageConfig:
 			rotation=rotation,
 			compression_level=compression_level,
 		)
+
+	def resolve_rotation_policy(self, *, source: str, stream: str) -> RotationPolicyConfig:
+		return self.rotation.resolve_policy(source=source, stream=stream)
 
 
 @dataclass(frozen=True, slots=True)
@@ -426,6 +583,39 @@ def _require_int(mapping: Mapping[str, Any], key: str, location: str) -> int:
 	if isinstance(value, bool) or not isinstance(value, int):
 		raise ConfigError(f"{location}.{key} must be an integer")
 	return value
+
+
+def _optional_int(mapping: Mapping[str, Any], key: str, location: str) -> int | None:
+	if key not in mapping:
+		return None
+	value = mapping[key]
+	if value is None:
+		return None
+	if isinstance(value, bool) or not isinstance(value, int):
+		raise ConfigError(f"{location}.{key} must be an integer when provided")
+	return value
+
+
+def _require_int_with_default(mapping: Mapping[str, Any], key: str, location: str, *, default: int) -> int:
+	if key not in mapping:
+		return default
+	return _require_int(mapping, key, location)
+
+
+def _require_bool_with_default(
+	mapping: Mapping[str, Any],
+	key: str,
+	location: str,
+	*,
+	default: bool,
+) -> bool:
+	if key not in mapping:
+		return default
+	return _require_bool(mapping, key, location)
+
+
+def _normalize_rotation_stream_key(stream_name: str) -> str:
+	return stream_name.strip().replace("@", "_").replace("/", "_")
 
 
 def _require_mapping_list(mapping: Mapping[str, Any], key: str, location: str) -> Sequence[Mapping[str, Any]]:

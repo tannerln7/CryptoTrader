@@ -9,7 +9,7 @@ from pathlib import Path
 from .config import RecorderConfig
 from .sources import build_aster_stream_targets
 from .sources.aster_depth import build_aster_depth_stream_targets
-from .storage import sanitize_path_component, validate_raw_file
+from .storage import is_active_raw_file, sanitize_path_component, validate_raw_file
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +47,7 @@ def build_data_quality_report(
 ) -> DataQualityReport:
 	expected_routes = _expected_routes(config)
 	actual_routes = _group_raw_files(config.runtime.data_root)
+	active_routes = _group_active_raw_files(config.runtime.data_root)
 	routes: list[RouteQualitySummary] = []
 	ok_route_count = 0
 	missing_route_count = 0
@@ -55,7 +56,30 @@ def build_data_quality_report(
 
 	for route, expected in sorted(expected_routes.items()):
 		paths = actual_routes.get(route)
+		active_paths = active_routes.get(route, [])
 		if not paths:
+			if active_paths:
+				latest_active_path = max(active_paths, key=lambda candidate: candidate.stat().st_mtime)
+				latest_active_output = datetime.fromtimestamp(latest_active_path.stat().st_mtime, tz=UTC)
+				latest_active_output_utc = latest_active_output.isoformat().replace("+00:00", "Z")
+				active_age_seconds = max((datetime.now(UTC) - latest_active_output).total_seconds(), 0.0)
+				status = "incomplete-active"
+				message = "Found active raw segment(s); sealed validation skipped"
+				if active_age_seconds > stale_after_seconds:
+					status = "stale-active"
+					message = f"Latest active raw segment is {active_age_seconds:.1f}s old; sealed validation skipped"
+				routes.append(
+					RouteQualitySummary(
+						route=route,
+						status=status,
+						latest_path=str(latest_active_path),
+						latest_output_utc=latest_active_output_utc,
+						record_count=None,
+						message=message,
+						required=expected.required,
+					),
+				)
+				continue
 			status = "missing"
 			message = "No raw files found for expected route"
 			if not expected.required:
@@ -106,6 +130,10 @@ def build_data_quality_report(
 			ok_route_count += 1
 			status = "ok"
 			message = None
+
+		if active_paths:
+			active_note = f"{len(active_paths)} active segment(s) skipped"
+			message = active_note if message is None else f"{message}; {active_note}"
 
 		routes.append(
 			RouteQualitySummary(
@@ -184,6 +212,23 @@ def _group_raw_files(data_root: Path) -> dict[str, list[Path]]:
 	if not raw_root.exists():
 		return routes
 	for path in raw_root.rglob("part-*.jsonl.zst"):
+		relative = path.relative_to(raw_root)
+		parts = relative.parts
+		if len(parts) < 4:
+			continue
+		route = "/".join(parts[:4])
+		routes.setdefault(route, []).append(path)
+	return routes
+
+
+def _group_active_raw_files(data_root: Path) -> dict[str, list[Path]]:
+	routes: dict[str, list[Path]] = {}
+	raw_root = data_root / "raw"
+	if not raw_root.exists():
+		return routes
+	for path in raw_root.rglob("part-*.jsonl.zst.open"):
+		if not is_active_raw_file(path):
+			continue
 		relative = path.relative_to(raw_root)
 		parts = relative.parts
 		if len(parts) < 4:

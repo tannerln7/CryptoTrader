@@ -10,6 +10,9 @@ from typing import Any
 
 import zstandard
 
+ACTIVE_RAW_FILE_SUFFIX = ".jsonl.zst.open"
+SEALED_RAW_FILE_SUFFIX = ".jsonl.zst"
+
 REQUIRED_RAW_FIELDS = frozenset(
     {
         "schema",
@@ -36,7 +39,16 @@ class RawFileValidationSummary:
     last_ts_recv_utc: str | None
 
 
-def iter_raw_records(path: Path) -> Iterator[dict[str, Any]]:
+def is_active_raw_file(path: Path) -> bool:
+    return path.name.endswith(ACTIVE_RAW_FILE_SUFFIX)
+
+
+def is_sealed_raw_file(path: Path) -> bool:
+    return path.name.endswith(SEALED_RAW_FILE_SUFFIX) and not is_active_raw_file(path)
+
+
+def iter_raw_records(path: Path, *, allow_active: bool = False) -> Iterator[dict[str, Any]]:
+    _ensure_raw_file_is_readable(path, allow_active=allow_active)
     with zstandard.open(path, mode="rt", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
             text = line.strip()
@@ -51,12 +63,12 @@ def iter_raw_records(path: Path) -> Iterator[dict[str, Any]]:
             yield record
 
 
-def validate_raw_file(path: Path) -> RawFileValidationSummary:
+def validate_raw_file(path: Path, *, allow_active: bool = False) -> RawFileValidationSummary:
     record_count = 0
     first_ts_recv_utc: str | None = None
     last_ts_recv_utc: str | None = None
 
-    for record_count, record in enumerate(iter_raw_records(path), start=1):
+    for record_count, record in enumerate(iter_raw_records(path, allow_active=allow_active), start=1):
         _validate_required_fields(record=record, path=path, line_number=record_count)
         current_timestamp = record["ts_recv_utc"]
         if first_ts_recv_utc is None:
@@ -72,6 +84,11 @@ def validate_raw_file(path: Path) -> RawFileValidationSummary:
         first_ts_recv_utc=first_ts_recv_utc,
         last_ts_recv_utc=last_ts_recv_utc,
     )
+
+
+def _ensure_raw_file_is_readable(path: Path, *, allow_active: bool) -> None:
+    if is_active_raw_file(path) and not allow_active:
+        raise ValueError(f"Refusing to validate active raw segment by default: {path}")
 
 
 def _validate_required_fields(*, path: Path, line_number: int, record: Mapping[str, Any]) -> None:

@@ -12,7 +12,7 @@ from aiohttp import web
 
 from ..contracts import build_alert_event, build_recorder_error
 from ..runtime import RecorderRuntime
-from ..storage import RawJsonlZstWriter, RawStreamRoute
+from ..storage import RawJsonlZstWriter, RawStreamRoute, is_sealed_raw_file
 
 _TRADINGVIEW_ALERT_ROUTE = RawStreamRoute(
 	source="tradingview",
@@ -87,12 +87,20 @@ class TradingViewWebhookService:
 			route=_TRADINGVIEW_ALERT_ROUTE,
 			run_id=self.runtime.run_id,
 			compression_level=self.runtime.config.storage.compression_level,
+			rotation_policy=self.runtime.config.storage.resolve_rotation_policy(
+				source=_TRADINGVIEW_ALERT_ROUTE.source,
+				stream=_TRADINGVIEW_ALERT_ROUTE.stream,
+			),
 		)
 		self._error_writer = RawJsonlZstWriter(
 			data_root=self.runtime.config.runtime.data_root,
 			route=_TRADINGVIEW_ERROR_ROUTE,
 			run_id=self.runtime.run_id,
 			compression_level=self.runtime.config.storage.compression_level,
+			rotation_policy=self.runtime.config.storage.resolve_rotation_policy(
+				source=_TRADINGVIEW_ERROR_ROUTE.source,
+				stream=_TRADINGVIEW_ERROR_ROUTE.stream,
+			),
 		)
 		self.runtime.app.router.add_post(self.path, self.handle_request)
 		self._site = await self.runtime.start_site(self.bind_host, self.bind_port)
@@ -118,9 +126,11 @@ class TradingViewWebhookService:
 	async def close(self) -> None:
 		if self._writer is not None:
 			self._writer.close()
+			self.output_paths.update(_collect_sealed_output_paths(self._writer))
 			self._writer = None
 		if self._error_writer is not None:
 			self._error_writer.close()
+			self.output_paths.update(_collect_sealed_output_paths(self._error_writer))
 			self._error_writer = None
 		self._started = False
 
@@ -144,7 +154,8 @@ class TradingViewWebhookService:
 			body, body_format = parse_tradingview_body(request.content_type, body_text)
 		except ValueError as exc:
 			self.error_record_count += 1
-			self.output_paths.add(
+			_add_output_path_if_sealed(
+				self.output_paths,
 				self._error_writer.write_record(
 					build_recorder_error(
 						source="tradingview",
@@ -169,7 +180,8 @@ class TradingViewWebhookService:
 			return web.Response(status=400, text="invalid json")
 
 		self.request_count += 1
-		self.output_paths.add(
+		_add_output_path_if_sealed(
+			self.output_paths,
 			self._writer.write_record(
 				build_alert_event(
 					source="tradingview",
@@ -227,9 +239,22 @@ async def serve_tradingview_webhook(
 	await service.start()
 	try:
 		await service.wait(duration_seconds=duration_seconds)
-		return service.build_summary()
 	finally:
 		await service.close()
+	return service.build_summary()
+
+
+def _add_output_path_if_sealed(output_paths: set[Path], path: Path) -> None:
+	if is_sealed_raw_file(path):
+		output_paths.add(path)
+
+
+def _collect_sealed_output_paths(*writers: RawJsonlZstWriter) -> set[Path]:
+	sealed_paths: set[Path] = set()
+	for writer in writers:
+		for segment in writer.sealed_segments:
+			sealed_paths.add(segment.sealed_path)
+	return sealed_paths
 
 
 def _extract_request_headers(request: web.Request) -> dict[str, str]:

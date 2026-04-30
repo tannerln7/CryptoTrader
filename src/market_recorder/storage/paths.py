@@ -34,14 +34,20 @@ def parse_utc_timestamp(value: str) -> datetime:
     return timestamp.astimezone(timezone.utc)
 
 
-def build_raw_file_path(
+def format_compact_utc(value: datetime) -> str:
+    timestamp = _require_utc_datetime(value, name="value")
+    if timestamp.microsecond:
+        return timestamp.strftime("%Y%m%dT%H%M%S") + f"{timestamp.microsecond:06d}Z"
+    return timestamp.strftime("%Y%m%dT%H%M%SZ")
+
+
+def build_raw_stream_directory(
     *,
     data_root: Path,
     route: RawStreamRoute,
-    ts_recv_utc: str,
-    run_id: str,
+    segment_start: datetime,
 ) -> Path:
-    timestamp = parse_utc_timestamp(ts_recv_utc)
+    timestamp = _require_utc_datetime(segment_start, name="segment_start")
     return (
         data_root
         / "raw"
@@ -51,5 +57,43 @@ def build_raw_file_path(
         / sanitize_path_component(route.stream)
         / f"date={timestamp:%Y-%m-%d}"
         / f"hour={timestamp:%H}"
-        / f"part-{sanitize_path_component(run_id)}.jsonl.zst"
     )
+
+
+def build_active_raw_segment_path(
+    *,
+    data_root: Path,
+    route: RawStreamRoute,
+    segment_start: datetime,
+    run_id: str,
+) -> Path:
+    return build_raw_stream_directory(
+        data_root=data_root,
+        route=route,
+        segment_start=segment_start,
+    ) / f"part-{format_compact_utc(segment_start)}-{sanitize_path_component(run_id)}.jsonl.zst.open"
+
+
+def build_sealed_raw_segment_path(
+    *,
+    data_root: Path,
+    route: RawStreamRoute,
+    segment_start: datetime,
+    segment_end: datetime,
+    run_id: str,
+) -> Path:
+    return build_raw_stream_directory(
+        data_root=data_root,
+        route=route,
+        segment_start=segment_start,
+    ) / (
+        f"part-{format_compact_utc(segment_start)}-"
+        f"{format_compact_utc(segment_end)}-"
+        f"{sanitize_path_component(run_id)}.jsonl.zst"
+    )
+
+
+def _require_utc_datetime(value: datetime, *, name: str) -> datetime:
+    if value.tzinfo is None:
+        raise ValueError(f"{name} must be timezone-aware")
+    return value.astimezone(timezone.utc)

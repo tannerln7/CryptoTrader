@@ -14,7 +14,7 @@ import aiohttp
 from ..config import AsterSourceConfig, AsterSymbolConfig
 from ..contracts import build_market_event, build_recorder_error, build_rest_snapshot
 from ..runtime import RecorderRuntime
-from ..storage import RawJsonlZstWriter, RawStreamRoute
+from ..storage import RawJsonlZstWriter, RawStreamRoute, is_sealed_raw_file
 from ..timeutil import utc_now_ns
 
 _ASTER_DEPTH_WS_ERROR_ROUTE = RawStreamRoute(
@@ -166,6 +166,10 @@ async def capture_aster_depth(
 			),
 			run_id=runtime.run_id,
 			compression_level=config.storage.compression_level,
+			rotation_policy=config.storage.resolve_rotation_policy(
+				source="aster",
+				stream=target.logical_stream,
+			),
 		)
 		for target in targets
 	}
@@ -180,6 +184,10 @@ async def capture_aster_depth(
 			),
 			run_id=runtime.run_id,
 			compression_level=config.storage.compression_level,
+			rotation_policy=config.storage.resolve_rotation_policy(
+				source="aster",
+				stream=f"depth_snapshot_{depth_config.snapshot_limit}",
+			),
 		)
 		for symbol in config.sources.aster.symbols
 	}
@@ -188,12 +196,20 @@ async def capture_aster_depth(
 		route=_ASTER_DEPTH_WS_ERROR_ROUTE,
 		run_id=runtime.run_id,
 		compression_level=config.storage.compression_level,
+		rotation_policy=config.storage.resolve_rotation_policy(
+			source=_ASTER_DEPTH_WS_ERROR_ROUTE.source,
+			stream=_ASTER_DEPTH_WS_ERROR_ROUTE.stream,
+		),
 	)
 	rest_error_writer = RawJsonlZstWriter(
 		data_root=config.runtime.data_root,
 		route=_ASTER_DEPTH_REST_ERROR_ROUTE,
 		run_id=runtime.run_id,
 		compression_level=config.storage.compression_level,
+		rotation_policy=config.storage.resolve_rotation_policy(
+			source=_ASTER_DEPTH_REST_ERROR_ROUTE.source,
+			stream=_ASTER_DEPTH_REST_ERROR_ROUTE.stream,
+		),
 	)
 
 	deadline = monotonic() + duration_seconds if duration_seconds is not None else None
@@ -271,7 +287,8 @@ async def capture_aster_depth(
 								raise ValueError(f"Unexpected Aster depth stream name: {stream_name}")
 
 							depth_record_count += 1
-							output_paths.add(
+							_add_output_path_if_sealed(
+								output_paths,
 								depth_writers[stream_name].write_record(
 									build_market_event(
 										source="aster",
@@ -297,7 +314,8 @@ async def capture_aster_depth(
 								if check.requires_restart:
 									continuity_restart_count += 1
 									error_record_count += 1
-									output_paths.add(
+									_add_output_path_if_sealed(
+										output_paths,
 										ws_error_writer.write_record(
 											build_recorder_error(
 												source="aster",
@@ -337,7 +355,8 @@ async def capture_aster_depth(
 			except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, json.JSONDecodeError) as exc:
 				reconnect_count += 1
 				error_record_count += 1
-				output_paths.add(
+				_add_output_path_if_sealed(
+					output_paths,
 					ws_error_writer.write_record(
 						build_recorder_error(
 							source="aster",
@@ -366,6 +385,14 @@ async def capture_aster_depth(
 				await asyncio.sleep(_DEFAULT_RECONNECT_DELAY_SECONDS)
 	finally:
 		_close_all_writers(depth_writers, snapshot_writers, ws_error_writer, rest_error_writer)
+		output_paths.update(
+			_collect_sealed_output_paths(
+				*depth_writers.values(),
+				*snapshot_writers.values(),
+				ws_error_writer,
+				rest_error_writer,
+			),
+		)
 
 	return AsterDepthCaptureSummary(
 		depth_record_count=depth_record_count,
@@ -396,7 +423,8 @@ async def _capture_due_snapshots(
 			continue
 		try:
 			snapshot_request_count += 1
-			output_paths.add(
+			_add_output_path_if_sealed(
+				output_paths,
 				await _write_depth_snapshot(
 					runtime=runtime,
 					symbol=symbol,
@@ -410,7 +438,8 @@ async def _capture_due_snapshots(
 			rest_error_writer.flush()
 		except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, json.JSONDecodeError) as exc:
 			error_record_count += 1
-			output_paths.add(
+			_add_output_path_if_sealed(
+				output_paths,
 				rest_error_writer.write_record(
 					build_recorder_error(
 						source="aster",
@@ -549,3 +578,16 @@ def _stop_requested(*, records_written: int, event_limit: int | None, deadline: 
 	if deadline is not None and monotonic() >= deadline:
 		return True
 	return False
+
+
+def _add_output_path_if_sealed(output_paths: set[Path], path: Path) -> None:
+	if is_sealed_raw_file(path):
+		output_paths.add(path)
+
+
+def _collect_sealed_output_paths(*writers: RawJsonlZstWriter) -> set[Path]:
+	sealed_paths: set[Path] = set()
+	for writer in writers:
+		for segment in writer.sealed_segments:
+			sealed_paths.add(segment.sealed_path)
+	return sealed_paths

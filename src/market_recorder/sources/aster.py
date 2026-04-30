@@ -13,7 +13,7 @@ import aiohttp
 from ..config import AsterSourceConfig
 from ..contracts import build_market_event, build_recorder_error
 from ..runtime import RecorderRuntime
-from ..storage import RawJsonlZstWriter, RawStreamRoute
+from ..storage import RawJsonlZstWriter, RawStreamRoute, is_sealed_raw_file
 
 _ASTER_ERROR_ROUTE = RawStreamRoute(
     source="aster",
@@ -84,6 +84,10 @@ async def capture_aster(
             ),
             run_id=runtime.run_id,
             compression_level=config.storage.compression_level,
+            rotation_policy=config.storage.resolve_rotation_policy(
+                source="aster",
+                stream=target.logical_stream,
+            ),
         )
         for target in targets
     }
@@ -92,6 +96,10 @@ async def capture_aster(
         route=_ASTER_ERROR_ROUTE,
         run_id=runtime.run_id,
         compression_level=config.storage.compression_level,
+        rotation_policy=config.storage.resolve_rotation_policy(
+            source=_ASTER_ERROR_ROUTE.source,
+            stream=_ASTER_ERROR_ROUTE.stream,
+        ),
     )
     deadline = monotonic() + duration_seconds if duration_seconds is not None else None
     records_written = 0
@@ -122,7 +130,8 @@ async def capture_aster(
                             if target is None:
                                 raise ValueError(f"Unexpected Aster stream name: {stream_name}")
                             records_written += 1
-                            output_paths.add(
+                            _add_output_path_if_sealed(
+                                output_paths,
                                 writers[stream_name].write_record(
                                     build_market_event(
                                         source="aster",
@@ -160,7 +169,8 @@ async def capture_aster(
             except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, json.JSONDecodeError) as exc:
                 reconnect_count += 1
                 error_record_count += 1
-                output_paths.add(
+                _add_output_path_if_sealed(
+                    output_paths,
                     error_writer.write_record(
                         build_recorder_error(
                             source="aster",
@@ -189,6 +199,7 @@ async def capture_aster(
                 await asyncio.sleep(_DEFAULT_RECONNECT_DELAY_SECONDS)
     finally:
         _close_all_writers(writers, error_writer)
+        output_paths.update(_collect_sealed_output_paths(*writers.values(), error_writer))
 
     return AsterCaptureSummary(
         records_written=records_written,
@@ -227,3 +238,16 @@ def _stop_requested(*, records_written: int, event_limit: int | None, deadline: 
     if deadline is not None and monotonic() >= deadline:
         return True
     return False
+
+
+def _add_output_path_if_sealed(output_paths: set[Path], path: Path) -> None:
+    if is_sealed_raw_file(path):
+        output_paths.add(path)
+
+
+def _collect_sealed_output_paths(*writers: RawJsonlZstWriter) -> set[Path]:
+    sealed_paths: set[Path] = set()
+    for writer in writers:
+        for segment in writer.sealed_segments:
+            sealed_paths.add(segment.sealed_path)
+    return sealed_paths

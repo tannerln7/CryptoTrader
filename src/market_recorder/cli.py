@@ -259,7 +259,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     command = args.command or "status"
 
     if args.command == "validate-raw":
-        summary = validate_raw_file(Path(args.path))
+        try:
+            summary = validate_raw_file(Path(args.path))
+        except ValueError as exc:
+            print(f"Validation error: {exc}", file=sys.stderr)
+            return 1
         print(_format_validation_summary(summary))
         return 0
 
@@ -329,6 +333,8 @@ async def _run_runtime_check(config) -> int:
 
 
 def _format_config_summary(config) -> str:
+    default_policy = config.storage.rotation.default
+    max_bytes = default_policy.max_bytes if default_policy.max_bytes is not None else "none"
     return "\n".join(
         [
             f"Configuration valid: {config.config_path}",
@@ -337,7 +343,7 @@ def _format_config_summary(config) -> str:
             f"Log level: {config.logging.level}",
             f"Enabled sources: {_format_enabled_sources(config.enabled_sources)}",
             f"Storage format: {config.storage.format}",
-            f"Rotation: {config.storage.rotation}",
+            f"Rotation default: max_age_seconds={default_policy.max_age_seconds}, max_bytes={max_bytes}",
             f"Compression level: {config.storage.compression_level}",
         ],
     )
@@ -527,11 +533,14 @@ def _write_sample_output(config, args: argparse.Namespace) -> str:
         route=route,
         run_id=run_id,
         compression_level=config.storage.compression_level,
+        rotation_policy=config.storage.resolve_rotation_policy(
+            source=route.source,
+            stream=route.stream,
+        ),
     )
     conn_id = f"{run_id}-conn"
-    last_path = None
     for seq in (1, 2):
-        last_path = writer.write_record(
+        writer.write_record(
             build_market_event(
                 source=route.source,
                 transport=route.transport,
@@ -547,9 +556,10 @@ def _write_sample_output(config, args: argparse.Namespace) -> str:
     writer.flush()
     writer.close()
 
-    if last_path is None:
+    if not writer.sealed_segments:
         raise RuntimeError("Sample writer did not produce an output path")
 
+    last_path = writer.sealed_segments[-1].sealed_path
     summary = validate_raw_file(last_path)
     return "\n".join(
         [

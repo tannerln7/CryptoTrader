@@ -14,7 +14,7 @@ import aiohttp
 
 from ..contracts import build_market_event, build_recorder_error
 from ..runtime import RecorderRuntime
-from ..storage import RawJsonlZstWriter, RawStreamRoute
+from ..storage import RawJsonlZstWriter, RawStreamRoute, is_sealed_raw_file
 
 _PYTH_ROUTE = RawStreamRoute(
     source="pyth",
@@ -81,12 +81,20 @@ async def capture_pyth(
         route=_PYTH_ROUTE,
         run_id=runtime.run_id,
         compression_level=config.storage.compression_level,
+        rotation_policy=config.storage.resolve_rotation_policy(
+            source=_PYTH_ROUTE.source,
+            stream=_PYTH_ROUTE.stream,
+        ),
     )
     error_writer = RawJsonlZstWriter(
         data_root=config.runtime.data_root,
         route=_PYTH_ERROR_ROUTE,
         run_id=runtime.run_id,
         compression_level=config.storage.compression_level,
+        rotation_policy=config.storage.resolve_rotation_policy(
+            source=_PYTH_ERROR_ROUTE.source,
+            stream=_PYTH_ERROR_ROUTE.stream,
+        ),
     )
     deadline = monotonic() + duration_seconds if duration_seconds is not None else None
     records_written = 0
@@ -116,7 +124,8 @@ async def capture_pyth(
                             payload = json.loads(payload_text)
                         except json.JSONDecodeError as exc:
                             error_record_count += 1
-                            output_paths.add(
+                            _add_output_path_if_sealed(
+                                output_paths,
                                 error_writer.write_record(
                                     build_recorder_error(
                                         source="pyth",
@@ -138,7 +147,8 @@ async def capture_pyth(
                             continue
 
                         records_written += 1
-                        output_paths.add(
+                        _add_output_path_if_sealed(
+                            output_paths,
                             writer.write_record(
                                 build_market_event(
                                     source="pyth",
@@ -175,7 +185,8 @@ async def capture_pyth(
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 reconnect_count += 1
                 error_record_count += 1
-                output_paths.add(
+                _add_output_path_if_sealed(
+                    output_paths,
                     error_writer.write_record(
                         build_recorder_error(
                             source="pyth",
@@ -205,6 +216,7 @@ async def capture_pyth(
     finally:
         writer.close()
         error_writer.close()
+        output_paths.update(_collect_sealed_output_paths(writer, error_writer))
 
     return PythCaptureSummary(
         records_written=records_written,
@@ -220,3 +232,16 @@ def _stop_requested(*, records_written: int, event_limit: int | None, deadline: 
     if deadline is not None and monotonic() >= deadline:
         return True
     return False
+
+
+def _add_output_path_if_sealed(output_paths: set[Path], path: Path) -> None:
+    if is_sealed_raw_file(path):
+        output_paths.add(path)
+
+
+def _collect_sealed_output_paths(*writers: RawJsonlZstWriter) -> set[Path]:
+    sealed_paths: set[Path] = set()
+    for writer in writers:
+        for segment in writer.sealed_segments:
+            sealed_paths.add(segment.sealed_path)
+    return sealed_paths

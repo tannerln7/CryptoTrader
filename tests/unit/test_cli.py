@@ -4,12 +4,13 @@ from pathlib import Path
 
 from market_recorder.alerts import TradingViewWebhookSummary
 from market_recorder.cli import build_parser, main
+from market_recorder.contracts import build_market_event
 from market_recorder.service_control import (
   RecorderServiceState,
   RecorderServiceStatus,
   default_service_paths,
 )
-from market_recorder.storage import validate_raw_file
+from market_recorder.storage import RawJsonlZstWriter, RawStreamRoute, validate_raw_file
 
 
 def _service_status(
@@ -150,6 +151,42 @@ validation:
     raw_path = Path(captured.out.splitlines()[0].split(": ", 1)[1])
     summary = validate_raw_file(raw_path)
     assert summary.record_count == 2
+
+
+def test_cli_validate_raw_rejects_active_segment(tmp_path: Path, capsys) -> None:
+    route = RawStreamRoute(source="sample", transport="internal", source_symbol="BTCUSD", stream="price_stream")
+    writer = RawJsonlZstWriter(
+      data_root=tmp_path,
+      route=route,
+      run_id="sample-run",
+      compression_level=3,
+    )
+    active_path = writer.write_record(
+      build_market_event(
+        source=route.source,
+        transport=route.transport,
+        stream=route.stream,
+        stream_name=None,
+        canonical_symbol="BTCUSD",
+        source_symbol=route.source_symbol,
+        conn_id="sample-conn",
+        seq=1,
+        payload={"price": "1"},
+        ts_recv_ns=1,
+        ts_recv_utc="2026-04-30T14:00:00Z",
+        monotonic_value=1,
+      ),
+    )
+    writer.flush()
+
+    exit_code = main(["validate-raw", str(active_path)])
+    captured = capsys.readouterr()
+
+    writer.close()
+
+    assert exit_code == 1
+    assert "Validation error:" in captured.err
+    assert "Refusing to validate active raw segment" in captured.err
 
 
 def test_cli_serve_tradingview_passes_unstarted_runtime(tmp_path: Path, capsys, monkeypatch) -> None:

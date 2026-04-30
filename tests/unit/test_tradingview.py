@@ -83,6 +83,7 @@ validation:
 				assert await response.text() == "ok"
 
 		await service.wait(duration_seconds=1)
+		await service.close()
 		summary = service.build_summary()
 		assert summary.request_count == 1
 		assert summary.error_record_count == 0
@@ -98,7 +99,6 @@ validation:
 		assert record["payload"]["body_format"] == "json"
 		assert record["payload"]["body"]["event"] == "swing_choch"
 
-		await service.close()
 		await runtime.close()
 
 	asyncio.run(scenario())

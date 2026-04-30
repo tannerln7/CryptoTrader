@@ -13,8 +13,48 @@ logging:
 
 storage:
   format: jsonl.zst
-  rotation: hourly
   compression_level: 3
+  rotation:
+    default:
+      max_age_seconds: 3600
+      max_bytes: 536870912
+    classes:
+      high_frequency:
+        max_age_seconds: 3600
+        max_bytes: 536870912
+      medium_frequency:
+        max_age_seconds: 21600
+        max_bytes: 268435456
+      low_frequency:
+        max_age_seconds: 86400
+        max_bytes: 134217728
+      snapshots:
+        max_age_seconds: 86400
+        max_bytes: 268435456
+    stream_classes:
+      aster:
+        aggTrade: high_frequency
+        bookTicker: high_frequency
+        markPrice@1s: medium_frequency
+        forceOrder: low_frequency
+        kline_1m: medium_frequency
+        kline_5m: medium_frequency
+        kline_15m: medium_frequency
+        depth20@100ms: high_frequency
+        depth@100ms: high_frequency
+        depth_snapshot_1000: snapshots
+      pyth:
+        price_stream: high_frequency
+      tradingview:
+        alert: low_frequency
+    # Reserved for a future service-owned checkpoint/seal flow.
+    # These constraints are parsed and documented now, but manual rotation is not yet exposed.
+    manual_rotation:
+      enabled: false
+      require_reason: true
+      min_age_seconds: 300
+      min_bytes: 1048576
+      cooldown_seconds: 300
 
 validation:
   enable_sample_checks: true

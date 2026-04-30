@@ -13,6 +13,7 @@ from .config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 from .contracts import build_market_event
 from .logging import configure_logging, get_logger
 from .runtime import RecorderRuntime
+from .sources.pyth import PythCaptureSummary, capture_pyth
 from .storage import (
     RawFileValidationSummary,
     RawJsonlZstWriter,
@@ -69,6 +70,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_config_arguments(run_parser)
 
+    capture_pyth_parser = subparsers.add_parser(
+        "capture-pyth",
+        help="Capture live Pyth SSE updates into raw storage.",
+    )
+    _add_config_arguments(capture_pyth_parser)
+    capture_pyth_parser.add_argument(
+        "--event-limit",
+        type=int,
+        default=None,
+        help="Optional maximum number of Pyth events to capture before exiting.",
+    )
+    capture_pyth_parser.add_argument(
+        "--duration-seconds",
+        type=float,
+        default=None,
+        help="Optional maximum runtime for the Pyth capture command.",
+    )
+
     validate_raw_parser = subparsers.add_parser(
         "validate-raw",
         help="Validate an existing raw .jsonl.zst file.",
@@ -103,6 +122,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if command == "write-sample":
         print(_write_sample_output(config, args))
         return 0
+    if command == "capture-pyth":
+        configure_logging(config.logging.level, structured=config.logging.structured)
+        return asyncio.run(_capture_pyth_command(config, args))
 
     configure_logging(config.logging.level, structured=config.logging.structured)
     return asyncio.run(_run_runtime_check(config))
@@ -145,6 +167,18 @@ def _format_validation_summary(summary: RawFileValidationSummary) -> str:
             f"Last timestamp: {summary.last_ts_recv_utc}",
         ],
     )
+
+
+def _format_pyth_capture_summary(summary: PythCaptureSummary) -> str:
+    lines = [
+        "Pyth capture complete",
+        f"Records: {summary.records_written}",
+        f"Reconnects: {summary.reconnect_count}",
+        f"Error records: {summary.error_record_count}",
+    ]
+    for path in summary.output_paths:
+        lines.append(f"Output path: {path}")
+    return "\n".join(lines)
 
 
 def _write_sample_output(config, args: argparse.Namespace) -> str:
@@ -191,6 +225,17 @@ def _write_sample_output(config, args: argparse.Namespace) -> str:
             f"Compression level: {config.storage.compression_level}",
         ],
     )
+
+
+async def _capture_pyth_command(config, args: argparse.Namespace) -> int:
+    async with RecorderRuntime.from_config(config) as runtime:
+        summary = await capture_pyth(
+            runtime=runtime,
+            event_limit=args.event_limit,
+            duration_seconds=args.duration_seconds,
+        )
+    print(_format_pyth_capture_summary(summary))
+    return 0
 
 
 def _add_config_arguments(parser: argparse.ArgumentParser) -> None:

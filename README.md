@@ -2,14 +2,15 @@
 
 This repository is a long-lived market-data and trading-research workspace.
 
-The repo now includes the Phase 0 scaffold and the Phase 1 runtime-contract foundation. Live market-data capture has not started yet.
+The repo now includes the Phase 0 scaffold, the Phase 1 runtime-contract foundation, and the Phase 2 storage and validation foundation. Live market-data capture has not started yet.
 
 ## Current Status
 
 - Phase 0 scaffold: implemented
 - Phase 1 runtime contracts and recorder skeleton: implemented
+- Phase 2 storage, rotation, and raw validation foundations: implemented
 - Live market-data capture: not implemented yet
-- Next implementation phase: storage, rotation, and raw validation foundations
+- Next implementation phase: Pyth reference stream capture
 
 ## Repo Defaults
 
@@ -60,6 +61,18 @@ Run the current runtime bootstrap check:
 market-recorder run
 ```
 
+Write a sample raw `.jsonl.zst` file under the configured data root:
+
+```bash
+market-recorder write-sample
+```
+
+Validate a raw file without loading it all into memory:
+
+```bash
+market-recorder validate-raw path/to/file.jsonl.zst
+```
+
 ## Canonical Layout
 
 Important paths:
@@ -92,7 +105,7 @@ These files are safe examples only. Do not commit real secrets or private endpoi
 - Keep `data/` local and untracked except for committed placeholders.
 - Update the relevant docs when behavior, structure, or assumptions change.
 
-## Implemented Through Phase 1
+## Implemented Through Phase 2
 
 The repo currently provides:
 
@@ -101,6 +114,9 @@ The repo currently provides:
 - UTC timestamp and run-id helpers
 - raw envelope helper functions aligned with the schema docs
 - an aiohttp-managed runtime skeleton with cleanup contexts and a shared client session
-- focused unit coverage for config loading, envelope helpers, runtime lifecycle, CLI behavior, and time helpers
+- canonical raw path generation aligned with the data-layout reference
+- a streaming Zstandard JSONL writer with hourly rotation
+- a streaming raw-file validator and sample-write CLI path
+- focused unit coverage for config loading, envelope helpers, runtime lifecycle, CLI behavior, time helpers, storage pathing, writer rotation, and raw validation
 
-The repo still does not write raw files or connect to live providers.
+The repo can now generate and validate sample raw files locally, but it still does not connect to live providers.

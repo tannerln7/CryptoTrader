@@ -69,6 +69,11 @@ Canonical pattern:
 raw/<source>/<transport>/<source_symbol>/<stream>/date=YYYY-MM-DD/hour=HH/part-*.jsonl.zst
 ```
 
+Path component note:
+
+* The implemented path builder sanitizes components into filesystem-safe names.
+* Current examples include `markPrice@1s -> markPrice_1s`, `depth@100ms -> depth_100ms`, and `BTC/USD -> BTC_USD` when a provider symbol contains a slash.
+
 Examples:
 
 ```text
@@ -120,17 +125,22 @@ Rationale:
 
 ### Raw Filename Policy
 
-Initial simple form:
+Acceptable simple form:
 
 ```text
 part-0000.jsonl.zst
 ```
 
-If multiple process starts within the same hour need separate files, use:
+Current implemented default:
 
 ```text
 part-<run_id>.jsonl.zst
 ```
+
+Rationale:
+
+* Avoids accidental overwrite across process restarts.
+* Keeps a single run's files easy to identify during validation.
 
 Never overwrite an existing raw file unless explicitly instructed.
 

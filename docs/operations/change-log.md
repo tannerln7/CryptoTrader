@@ -23,5 +23,6 @@ Use it to record implemented repo changes and meaningful documentation updates i
 
 ## 2026-04-30
 
+- `3bc71a4` — implemented the Phase 2 storage foundation with canonical raw-path generation, streaming `.jsonl.zst` writing, hourly rotation, sample output generation, and raw-file validation tooling.
 - `242d9aa` — implemented the Phase 1 runtime foundation with typed YAML config loading, raw-envelope helpers, aiohttp-managed lifecycle scaffolding, and CLI/runtime validation coverage.
 - `4a88c06` — created the Phase 0 repository baseline, including the canonical docs set, Context7-first agent rules, provider references, project scaffold, example config, package skeleton, and baseline validation hooks.

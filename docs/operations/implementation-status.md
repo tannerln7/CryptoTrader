@@ -83,13 +83,13 @@ Refs: `242d9aa`; `docs/phases/raw-recorder/phase1.md`; `src/market_recorder/runt
 
 ### Phase 2 — Storage, rotation, and raw validation foundations
 
-Status: planned
+Status: implemented
 
-Description: Raw file writing, rotation, compression, manifest handling, and validation tooling are planned before live source capture begins.
+Description: The repo now has canonical raw-path generation, a streaming Zstandard JSONL writer with hourly rotation, raw-file validation utilities, and CLI sample-write and validate-raw commands for local proof of output.
 
-Notes: Phase 2 should build on the existing `jsonl.zst` config contract, append-only raw storage semantics, and the Phase 1 runtime cleanup model rather than revisiting those choices.
+Notes: The storage layer currently targets append-only `part-<run_id>.jsonl.zst` files and validates records in a streaming fashion. Phase 3 should plug live Pyth events into this existing path instead of redesigning storage.
 
-Refs: `242d9aa`; `docs/phases/raw-recorder/phase2.md`
+Refs: `3bc71a4`; `docs/phases/raw-recorder/phase2.md`; `src/market_recorder/storage/writer.py`; `src/market_recorder/storage/validate.py`
 
 ### Phase 3 — Pyth reference stream capture
 
@@ -97,9 +97,9 @@ Status: planned
 
 Description: Pyth Hermes reference-price capture is planned as the first live raw stream integration.
 
-Notes: Preserve source payloads, provider timing metadata, and feed-level config without blending reference prices into exchange streams.
+Notes: Phase 3 should preserve source payloads, provider timing metadata, and feed-level config without blending reference prices into exchange streams, while reusing the Phase 2 storage and validation path.
 
-Refs: `4a88c06`; `docs/phases/raw-recorder/phase3.md`; `docs/reference/providers/pyth.md`
+Refs: `3bc71a4`; `docs/phases/raw-recorder/phase3.md`; `docs/reference/providers/pyth.md`
 
 ### Phase 4 — Aster market stream capture
 

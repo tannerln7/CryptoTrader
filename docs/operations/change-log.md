@@ -25,6 +25,7 @@ Use it to record implemented repo changes and meaningful documentation updates i
 
 ## 2026-04-30
 
+- `5f6e0df`, `ebcadb5` — made `ops/install/install.sh` prefer an existing `data/systemd/<instance>/config.yaml` when generating `/etc/market-recorder/<instance>.env`, and updated the install workflow docs to match.
 - `2dda61c`, `88be7e6` — fixed `market-recorder validate-config` for non-editable `python -m pip install .` installs by resolving repo-relative config paths from the runtime repo root instead of the installed package path, and recorded the behavior in the implementation status notes.
 - `039d147` — aligned the README, deployment, monitoring, and data-layout docs around the active `.jsonl.zst.open` to sealed `.jsonl.zst` lifecycle, sealed-file-only validation wording, and the parent-directory traverse note for service-user access checks.
 - `0c7b256`, `858a2b0` — clarified that `ops/install/install.sh --enable` only enables boot-time startup, added a repo-root service-user access check in the installer, and updated the fresh-install docs to create a runtime config first, verify repo and config access, then start through the unprivileged CLI.

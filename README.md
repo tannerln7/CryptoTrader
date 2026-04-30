@@ -50,7 +50,7 @@ At runtime, the system:
 3. Starts a shared aiohttp runtime for HTTP, SSE, and WebSocket workloads.
 4. Connects to enabled sources or binds the TradingView webhook receiver.
 5. Wraps incoming payloads in canonical raw envelopes with timestamps and run metadata.
-6. Writes `.jsonl.zst` files using hourly rotation under the configured data root.
+6. Writes active `.jsonl.zst.open` segments under the configured data root, then seals them into `.jsonl.zst` files on configured age or size rotation and on graceful shutdown.
 7. Exposes `/run/market-recorder/<instance>/control.sock`, emits runtime health manifests under the effective data root, and supports post-run quality validation.
 
 ## Storage Model
@@ -58,8 +58,12 @@ At runtime, the system:
 Raw records are written under a canonical route-based layout:
 
 ```text
-data/raw/<source>/<transport>/<source_symbol>/<stream>/date=YYYY-MM-DD/hour=HH/part-<run_id>.jsonl.zst
+<data-root>/raw/<source>/<transport>/<source_symbol>/<stream>/date=YYYY-MM-DD/hour=HH/
+	part-<segment_start>-<run_id>.jsonl.zst.open
+	part-<segment_start>-<segment_end>-<run_id>.jsonl.zst
 ```
+
+Active `.jsonl.zst.open` files are writer-owned and incomplete. Sealed `.jsonl.zst` files are the validation and read target.
 
 Examples:
 
@@ -208,6 +212,8 @@ sudo -u market-recorder test -x "${REPO_ROOT}/.venv/bin/python"
 sudo -u market-recorder test -r "${REPO_ROOT}/data/systemd/main/config.yaml"
 ```
 
+If the repo access check fails, verify execute and traverse permissions on every parent directory in the repo path, not just on the repo directory itself.
+
 Refresh your group membership so the unprivileged CLI can use the control socket and polkit rule:
 
 ```bash
@@ -355,7 +361,7 @@ Run a route-aware quality report after capture:
 market-recorder report-data-quality --stale-after-seconds 600
 ```
 
-For bounded validation runs, stop the worker before treating `validate-raw` or `report-data-quality` as authoritative. The current writer keeps the active hour file open during capture, so in-progress files may appear empty or partially written until shutdown finalizes them.
+For bounded validation runs, stop the worker before treating `validate-raw` or `report-data-quality` as authoritative. Validators and quality checks skip or refuse active `.jsonl.zst.open` files by default, so their results are authoritative for sealed `.jsonl.zst` files only.
 
 ## Validation And Development
 

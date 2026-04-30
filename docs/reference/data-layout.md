@@ -112,6 +112,8 @@ Use:
 .jsonl.zst        # sealed segment safe for validation and user reads
 ```
 
+Treat sealed `.jsonl.zst` files as the default validation and read target. Active `.jsonl.zst.open` files are incomplete until they are sealed.
+
 Rules:
 
 * One JSON object per line.
@@ -119,7 +121,7 @@ Rules:
 * Writers own active `.jsonl.zst.open` segments and never write directly to final-looking sealed files.
 * Active `.jsonl.zst.open` segments remain service-private while open; sealed `.jsonl.zst` files may be group-readable but are not group-writable.
 * Sealing closes the zstd frame and atomically renames the active path to a sealed `.jsonl.zst` path.
-* Validators and user-facing inspection commands should treat sealed `.jsonl.zst` files as authoritative by default.
+* Validators and user-facing inspection commands should treat sealed `.jsonl.zst` files as authoritative by default and skip or refuse active `.jsonl.zst.open` files.
 * Append-only.
 * Do not mutate or rewrite raw files during normal operation.
 

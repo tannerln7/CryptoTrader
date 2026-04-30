@@ -1,5 +1,5 @@
-# Phase 0 source examples.
-# These values are safe to commit and act as placeholders until Phase 1+ code formalizes the config schema.
+# Safe example source configuration for local recorder development and validation.
+# Keep the enabled sources and stream lists aligned with the implemented capture surfaces.
 
 pyth:
   enabled: true

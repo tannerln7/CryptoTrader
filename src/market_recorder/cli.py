@@ -1,4 +1,4 @@
-"""CLI entrypoints for configuration checks and runtime bootstrap."""
+"""CLI entrypoints for recorder validation, capture, and service operations."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Phase 0 scaffold package for the market recorder project."""
+"""Market recorder package for the raw data capture workspace."""
 
 __all__ = ["__version__"]
 

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "market-recorder"
 version = "0.1.0"
-description = "Phase 0 scaffold for a market-data and trading-research recorder workspace"
+description = "Market-data recorder workspace for durable raw capture and research"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
